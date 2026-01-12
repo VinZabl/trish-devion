@@ -327,24 +327,42 @@ Please confirm this order to proceed. Thank you for choosing AmberKin! 🎮
            /FB_IAB/i.test(navigator.userAgent);
   }, []);
 
-  const handleDownloadQRCode = (qrCodeUrl: string, paymentMethodName: string) => {
+  const handleDownloadQRCode = async (qrCodeUrl: string, paymentMethodName: string) => {
     // Prevent default navigation if download doesn't work
     if (isMessengerBrowser) {
       // In Messenger, downloads don't work - users can long-press the QR code image
       return;
     }
     
-    // For regular browsers, try download
+    // For regular browsers, fetch and download as blob to force download
     try {
+      const response = await fetch(qrCodeUrl);
+      if (!response.ok) throw new Error('Failed to fetch image');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = qrCodeUrl;
+      link.href = url;
       link.download = `qr-code-${paymentMethodName.toLowerCase().replace(/\s+/g, '-')}.png`;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
+      // Fallback: try direct link (might open instead of download)
+      try {
+        const link = document.createElement('a');
+        link.href = qrCodeUrl;
+        link.download = `qr-code-${paymentMethodName.toLowerCase().replace(/\s+/g, '-')}.png`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (fallbackError) {
+        console.error('Fallback download also failed:', fallbackError);
+      }
     }
   };
 
