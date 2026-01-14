@@ -178,30 +178,18 @@ export const usePaymentMethods = () => {
 
   const addPaymentMethod = async (method: Omit<PaymentMethod, 'created_at' | 'updated_at'>) => {
     try {
-      // Build insert object - DO NOT include qr_code_url at all if empty
-      const insertData: any = {
-        id: method.id,
-        name: method.name,
-        account_number: method.account_number,
-        account_name: method.account_name,
-        active: method.active,
-        sort_order: method.sort_order,
-        admin_name: (method.admin_name && method.admin_name.trim() !== '') ? method.admin_name.trim() : null
-      };
-      
-      // WORKAROUND: PostgREST schema cache issue - send empty string instead of omitting
-      // The database trigger will convert empty strings to NULL
-      const qrCodeValue = method.qr_code_url?.trim();
-      if (qrCodeValue && qrCodeValue !== '') {
-        insertData.qr_code_url = qrCodeValue;
-      } else {
-        // Send empty string - trigger will convert to NULL
-        insertData.qr_code_url = '';
-      }
-      
       const { data, error: insertError } = await supabase
         .from('payment_methods')
-        .insert(insertData)
+        .insert({
+          id: method.id,
+          name: method.name,
+          account_number: method.account_number,
+          account_name: method.account_name,
+          qr_code_url: method.qr_code_url,
+          active: method.active,
+          sort_order: method.sort_order,
+          admin_name: method.admin_name || null
+        })
         .select()
         .single();
 
@@ -217,39 +205,17 @@ export const usePaymentMethods = () => {
 
   const updatePaymentMethod = async (uuidId: string, updates: Partial<PaymentMethod>) => {
     try {
-      // Build update object, handle qr_code_url specially
-      const updateData: any = {
-        name: updates.name,
-        account_number: updates.account_number,
-        account_name: updates.account_name,
-        active: updates.active,
-        sort_order: updates.sort_order
-      };
-      
-      // Handle admin_name - ensure it's not empty
-      if (updates.admin_name !== undefined) {
-        const trimmedAdminName = updates.admin_name?.trim() || '';
-        if (trimmedAdminName) {
-          updateData.admin_name = trimmedAdminName;
-        } else {
-          updateData.admin_name = null;
-        }
-      }
-      
-      // Handle qr_code_url - send empty string if clearing (trigger converts to NULL)
-      if (updates.qr_code_url !== undefined) {
-        const qrCodeValue = updates.qr_code_url?.trim();
-        if (qrCodeValue && qrCodeValue !== '') {
-          updateData.qr_code_url = qrCodeValue;
-        } else {
-          // Send empty string - trigger will convert to NULL
-          updateData.qr_code_url = '';
-        }
-      }
-      
       const { error: updateError } = await supabase
         .from('payment_methods')
-        .update(updateData)
+        .update({
+          name: updates.name,
+          account_number: updates.account_number,
+          account_name: updates.account_name,
+          qr_code_url: updates.qr_code_url,
+          active: updates.active,
+          sort_order: updates.sort_order,
+          admin_name: updates.admin_name !== undefined ? updates.admin_name : undefined
+        })
         .eq('uuid_id', uuidId);
 
       if (updateError) throw updateError;

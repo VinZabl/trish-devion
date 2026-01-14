@@ -12,7 +12,13 @@ const SiteSettingsManager: React.FC = () => {
     site_name: '',
     site_description: '',
     currency: '',
-    currency_code: ''
+    currency_code: '',
+    footer_social_1: '',
+    footer_social_2: '',
+    footer_social_3: '',
+    footer_social_4: '',
+    footer_support_url: '',
+    order_option: 'order_via_messenger' as 'order_via_messenger' | 'place_order'
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
@@ -39,7 +45,13 @@ const SiteSettingsManager: React.FC = () => {
         site_name: siteSettings.site_name,
         site_description: siteSettings.site_description,
         currency: siteSettings.currency,
-        currency_code: siteSettings.currency_code
+        currency_code: siteSettings.currency_code,
+        footer_social_1: siteSettings.footer_social_1 || '',
+        footer_social_2: siteSettings.footer_social_2 || '',
+        footer_social_3: siteSettings.footer_social_3 || '',
+        footer_social_4: siteSettings.footer_social_4 || '',
+        footer_support_url: siteSettings.footer_support_url || '',
+        order_option: siteSettings.order_option || 'order_via_messenger'
       });
       setLogoPreview(siteSettings.site_logo);
     }
@@ -81,7 +93,13 @@ const SiteSettingsManager: React.FC = () => {
         site_description: formData.site_description,
         currency: formData.currency,
         currency_code: formData.currency_code,
-        site_logo: logoUrl
+        site_logo: logoUrl,
+        footer_social_1: formData.footer_social_1,
+        footer_social_2: formData.footer_social_2,
+        footer_social_3: formData.footer_social_3,
+        footer_social_4: formData.footer_social_4,
+        footer_support_url: formData.footer_support_url,
+        order_option: formData.order_option
       });
 
       setIsEditing(false);
@@ -97,7 +115,12 @@ const SiteSettingsManager: React.FC = () => {
         site_name: siteSettings.site_name,
         site_description: siteSettings.site_description,
         currency: siteSettings.currency,
-        currency_code: siteSettings.currency_code
+        currency_code: siteSettings.currency_code,
+        footer_social_1: siteSettings.footer_social_1 || '',
+        footer_social_2: siteSettings.footer_social_2 || '',
+        footer_social_3: siteSettings.footer_social_3 || '',
+        footer_social_4: siteSettings.footer_social_4 || '',
+        footer_support_url: siteSettings.footer_support_url || ''
       });
       setLogoPreview(siteSettings.site_logo);
     }
@@ -362,6 +385,127 @@ const SiteSettingsManager: React.FC = () => {
             ) : (
               <p className="text-lg font-medium text-black">{siteSettings?.currency_code}</p>
             )}
+          </div>
+        </div>
+
+        {/* Footer Links */}
+        <div className="border-t border-gray-200 pt-6 mt-6">
+          <h3 className="text-lg font-semibold text-black mb-4">Footer Links</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Configure social media links and customer support link for the footer. Leave blank to hide an item.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Social Media Link 1 (Facebook)</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  name="footer_social_1"
+                  value={formData.footer_social_1}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="https://facebook.com/yourpage"
+                />
+              ) : (
+                <p className="text-gray-600 break-all">{siteSettings?.footer_social_1 || '-'}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Social Media Link 2 (Instagram)</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  name="footer_social_2"
+                  value={formData.footer_social_2}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="https://instagram.com/yourhandle"
+                />
+              ) : (
+                <p className="text-gray-600 break-all">{siteSettings?.footer_social_2 || '-'}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Social Media Link 3 (Twitter/X)</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  name="footer_social_3"
+                  value={formData.footer_social_3}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="https://x.com/yourhandle"
+                />
+              ) : (
+                <p className="text-gray-600 break-all">{siteSettings?.footer_social_3 || '-'}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Social Media Link 4 (YouTube)</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  name="footer_social_4"
+                  value={formData.footer_social_4}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="https://youtube.com/@yourchannel"
+                />
+              ) : (
+                <p className="text-gray-600 break-all">{siteSettings?.footer_social_4 || '-'}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Customer Support Link</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  name="footer_support_url"
+                  value={formData.footer_support_url}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="https://example.com/support or tel:+639xxxxxxxxx"
+                />
+              ) : (
+                <p className="text-gray-600 break-all">{siteSettings?.footer_support_url || '-'}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Order Option */}
+        <div className="border-t border-gray-200 pt-6 mt-6">
+          <h3 className="text-lg font-semibold text-black mb-4">Order Option</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Choose how customers can place orders. "Order via Messenger" shows receipt upload, copy message, and messenger button. "Place Order" shows only receipt upload and place order button.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Order Method
+              </label>
+              {isEditing ? (
+                <select
+                  name="order_option"
+                  value={formData.order_option}
+                  onChange={(e) => setFormData(prev => ({ ...prev, order_option: e.target.value as 'order_via_messenger' | 'place_order' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                >
+                  <option value="order_via_messenger">Order via Messenger</option>
+                  <option value="place_order">Place Order</option>
+                </select>
+              ) : (
+                <p className="text-gray-600">
+                  {siteSettings?.order_option === 'place_order' ? 'Place Order' : 'Order via Messenger'}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

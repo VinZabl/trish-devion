@@ -20,12 +20,19 @@ export const useSiteSettings = () => {
       if (error) throw error;
 
       // Transform the data into a more usable format
+      const orderOptionValue = data.find(s => s.id === 'order_option')?.value || 'order_via_messenger';
       const settings: SiteSettings = {
         site_name: data.find(s => s.id === 'site_name')?.value || 'AmberKin x GamerXtream',
         site_logo: data.find(s => s.id === 'site_logo')?.value || '/logo.png',
         site_description: data.find(s => s.id === 'site_description')?.value || 'Welcome to AmberKin x GamerXtream — Your perfect game credits destination',
         currency: data.find(s => s.id === 'currency')?.value || '₱',
-        currency_code: data.find(s => s.id === 'currency_code')?.value || 'PHP'
+        currency_code: data.find(s => s.id === 'currency_code')?.value || 'PHP',
+        footer_social_1: data.find(s => s.id === 'footer_social_1')?.value || '',
+        footer_social_2: data.find(s => s.id === 'footer_social_2')?.value || '',
+        footer_social_3: data.find(s => s.id === 'footer_social_3')?.value || '',
+        footer_social_4: data.find(s => s.id === 'footer_social_4')?.value || '',
+        footer_support_url: data.find(s => s.id === 'footer_support_url')?.value || '',
+        order_option: (orderOptionValue === 'place_order' ? 'place_order' : 'order_via_messenger') as 'order_via_messenger' | 'place_order'
       };
 
       setSiteSettings(settings);

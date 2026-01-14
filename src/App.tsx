@@ -6,9 +6,10 @@ import SubNav from './components/SubNav';
 import Menu from './components/Menu';
 import Cart from './components/Cart';
 import Checkout from './components/Checkout';
-import FloatingCartButton from './components/FloatingCartButton';
+import FloatingSupportButton from './components/FloatingSupportButton';
 import AdminDashboard from './components/AdminDashboard';
 import { useMenu } from './hooks/useMenu';
+import Footer from './components/Footer';
 
 function MainApp() {
   const cart = useCart();
@@ -121,15 +122,16 @@ function MainApp() {
           cartItems={cart.cartItems}
           totalPrice={cart.getTotalPrice()}
           onBack={() => handleViewChange('cart')}
+          onNavigateToMenu={() => {
+            cart.clearCart();
+            handleViewChange('menu');
+          }}
         />
       )}
       
-      {currentView === 'menu' && (
-        <FloatingCartButton 
-          itemCount={cart.getTotalItems()}
-          onCartClick={() => handleViewChange('cart')}
-        />
-      )}
+      <FloatingSupportButton />
+
+      <Footer />
     </div>
   );
 }
