@@ -5,6 +5,7 @@ import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useImageUpload } from '../hooks/useImageUpload';
 import { useOrders } from '../hooks/useOrders';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { supabase } from '../lib/supabase';
 import OrderStatusModal from './OrderStatusModal';
 
 interface CheckoutProps {
@@ -39,6 +40,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack, onNa
   const [orderId, setOrderId] = useState<string | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState<string | null>(null);
+  const [invoiceNumberDate, setInvoiceNumberDate] = useState<string | null>(null);
 
   // Extract original menu item ID from cart item ID (format: "menuItemId:::CART:::timestamp-random")
   // This allows us to group all packages from the same game together
@@ -222,97 +225,203 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack, onNa
     setReceiptPreview(null);
     setReceiptError(null);
     setHasCopiedMessage(false); // Reset copy state when receipt is removed
+    setGeneratedInvoiceNumber(null); // Reset invoice number when receipt is removed
+    setInvoiceNumberDate(null);
+  };
+
+  // Generate invoice number (format: {orderNumber}M{month}D{day})
+  const generateInvoiceNumber = async (): Promise<string> => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Check if we already generated an invoice number for today
+    if (generatedInvoiceNumber && invoiceNumberDate === todayStr) {
+      return generatedInvoiceNumber;
+    }
+
+    try {
+      // Get start and end of today in UTC
+      const startOfDay = new Date(todayStr + 'T00:00:00.000Z');
+      const endOfDay = new Date(todayStr + 'T23:59:59.999Z');
+
+      // Count orders created today
+      const { count, error } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString());
+
+      if (error) throw error;
+
+      const orderNumber = (count || 0) + 1;
+      const month = today.getMonth() + 1; // 1-12
+      const day = today.getDate();
+
+      const invoiceNumber = `${orderNumber}M${month}D${day}`;
+      
+      // Store the generated invoice number and date
+      setGeneratedInvoiceNumber(invoiceNumber);
+      setInvoiceNumberDate(todayStr);
+      
+      return invoiceNumber;
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      // Fallback to a simple format if there's an error
+      const month = today.getMonth() + 1;
+      const day = today.getDate();
+      return `1M${month}D${day}`;
+    }
   };
 
   // Generate the order message text
-  const generateOrderMessage = (): string => {
-    // Build custom fields section grouped by game
-    let customFieldsSection = '';
+  const generateOrderMessage = async (): Promise<string> => {
+    // Generate invoice number first
+    const invoiceNumber = await generateInvoiceNumber();
+    
+    // Build message lines
+    const lines: string[] = [];
+    
+    // Invoice number
+    lines.push(`INVOICE # ${invoiceNumber}`);
+    lines.push(''); // Break after invoice
+    
+    // Build game/order sections
     if (hasAnyCustomFields) {
-      // Group games by their field values (to simplify when bulk input is used)
-      const gamesByFieldValues = new Map<string, { games: string[], fields: Array<{ label: string, value: string }> }>();
+      // Group games by their field values (for bulk input)
+      const gamesByFieldValues = new Map<string, { games: string[], items: CartItem[], fields: Array<{ label: string, value: string }> }>();
+      const itemsWithoutFields: CartItem[] = [];
       
-      itemsWithCustomFields.forEach(item => {
-        // Get all field values for this game (use original menu item ID)
-        const originalId = getOriginalMenuItemId(item.id);
-        const fields = item.customFields?.map(field => {
+      cartItems.forEach(cartItem => {
+        const originalId = getOriginalMenuItemId(cartItem.id);
+        const item = itemsWithCustomFields.find(i => getOriginalMenuItemId(i.id) === originalId);
+        
+        if (!item || !item.customFields || item.customFields.length === 0) {
+          // Item without custom fields, handle separately
+          itemsWithoutFields.push(cartItem);
+          return;
+        }
+        
+        const fields = item.customFields.map(field => {
           const valueKey = `${originalId}_${field.key}`;
           const value = customFieldValues[valueKey] || '';
           return value ? { label: field.label, value } : null;
         }).filter(Boolean) as Array<{ label: string, value: string }> || [];
         
-        if (fields.length === 0) return;
+        if (fields.length === 0) {
+          // No field values, treat as item without fields
+          itemsWithoutFields.push(cartItem);
+          return;
+        }
         
         // Create a key based on field values (to group games with same values)
         const valueKey = fields.map(f => `${f.label}:${f.value}`).join('|');
         
         if (!gamesByFieldValues.has(valueKey)) {
-          gamesByFieldValues.set(valueKey, { games: [], fields });
+          gamesByFieldValues.set(valueKey, { games: [], items: [], fields });
         }
-        gamesByFieldValues.get(valueKey)!.games.push(item.name);
+        const group = gamesByFieldValues.get(valueKey)!;
+        if (!group.games.includes(item.name)) {
+          group.games.push(item.name);
+        }
+        group.items.push(cartItem);
+        group.fields = fields; // Use the fields from this item
       });
       
-      // Build the section
-      const sections: string[] = [];
-      gamesByFieldValues.forEach(({ games, fields }) => {
-        if (games.length === 0 || fields.length === 0) return;
+      // Build sections for each group
+      gamesByFieldValues.forEach(({ games, items, fields }) => {
+        // Game name (only once if multiple games share same fields)
+        lines.push(`GAME: ${games.join(', ')}`);
         
-        // Add game names
-        sections.push(games.join('\n'));
-        
-        // If all values are the same, combine into one line
-        const allValuesSame = fields.every(f => f.value === fields[0].value);
-        if (allValuesSame && fields.length > 1) {
-          const labels = fields.map(f => f.label).join(', ');
-          const lastCommaIndex = labels.lastIndexOf(',');
-          const combinedLabels = lastCommaIndex > 0 
-            ? labels.substring(0, lastCommaIndex) + ' &' + labels.substring(lastCommaIndex + 1)
-            : labels;
-          sections.push(`${combinedLabels}: ${fields[0].value}`);
-        } else {
-          // Different values, show each field separately
-          const fieldStrings = fields.map(f => `${f.label}: ${f.value}`).join(', ');
-          sections.push(fieldStrings);
+        // ID & SERVER or other fields
+        if (fields.length === 1) {
+          lines.push(`${fields[0].label}: ${fields[0].value}`);
+        } else if (fields.length > 1) {
+          // Combine fields with & if multiple
+          const allValuesSame = fields.every(f => f.value === fields[0].value);
+          if (allValuesSame) {
+            // All values same, combine labels with &
+            const labels = fields.map(f => f.label);
+            if (labels.length === 2) {
+              lines.push(`${labels[0]} & ${labels[1]}: ${fields[0].value}`);
+            } else {
+              const allButLast = labels.slice(0, -1).join(', ');
+              const lastLabel = labels[labels.length - 1];
+              lines.push(`${allButLast} & ${lastLabel}: ${fields[0].value}`);
+            }
+          } else {
+            // Different values, show each field separately
+            const fieldPairs = fields.map(f => `${f.label}: ${f.value}`);
+            lines.push(fieldPairs.join(', '));
+          }
         }
+        
+        // Order items
+        items.forEach(item => {
+          let orderLine = `ORDER: ${item.selectedVariation?.name || item.name}`;
+          if (item.quantity > 1) {
+            orderLine += ` x${item.quantity}`;
+          }
+          orderLine += ` - ₱${item.totalPrice * item.quantity}`;
+          lines.push(orderLine);
+        });
       });
       
-      if (sections.length > 0) {
-        customFieldsSection = sections.join('\n');
+      // Handle items without custom fields
+      if (itemsWithoutFields.length > 0) {
+        const uniqueGames = [...new Set(itemsWithoutFields.map(item => item.name))];
+        lines.push(`GAME: ${uniqueGames.join(', ')}`);
+        
+        itemsWithoutFields.forEach(item => {
+          let orderLine = `ORDER: ${item.selectedVariation?.name || item.name}`;
+          if (item.quantity > 1) {
+            orderLine += ` x${item.quantity}`;
+          }
+          orderLine += ` - ₱${item.totalPrice * item.quantity}`;
+          lines.push(orderLine);
+        });
       }
     } else {
-      customFieldsSection = `🎮 IGN: ${customFieldValues['default_ign'] || ''}`;
+      // No custom fields, single account mode
+      const uniqueGames = [...new Set(cartItems.map(item => item.name))];
+      lines.push(`GAME: ${uniqueGames.join(', ')}`);
+      
+      // Default IGN field
+      const ign = customFieldValues['default_ign'] || '';
+      if (ign) {
+        lines.push(`IGN: ${ign}`);
+      }
+      
+      // Order items
+      cartItems.forEach(item => {
+        let orderLine = `ORDER: ${item.selectedVariation?.name || item.name}`;
+        if (item.quantity > 1) {
+          orderLine += ` x${item.quantity}`;
+        }
+        orderLine += ` - ₱${item.totalPrice * item.quantity}`;
+        lines.push(orderLine);
+      });
     }
-
-    const orderDetails = `
-🛒 AmberKin ORDER
-
-${customFieldsSection}
-
-📋 ORDER DETAILS:
-${cartItems.map(item => {
-  let itemDetails = `• ${item.name}`;
-  if (item.selectedVariation) {
-    itemDetails += ` (${item.selectedVariation.name})`;
-  }
-  itemDetails += ` x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
-  return itemDetails;
-}).join('\n')}
-
-💰 TOTAL: ₱${totalPrice}
-
-💳 Payment: ${selectedPaymentMethod?.name || ''}${selectedPaymentMethod?.admin_name ? ` - ${selectedPaymentMethod.admin_name}` : ''}
-
-📸 Payment Receipt: ${receiptImageUrl || ''}
-
-Please confirm this order to proceed. Thank you for choosing AmberKin! 🎮
-    `.trim();
-
-    return orderDetails;
+    
+    // Payment
+    const paymentLine = `PAYMENT: ${selectedPaymentMethod?.name || ''}${selectedPaymentMethod?.account_name ? ` - ${selectedPaymentMethod.account_name}` : ''}`;
+    lines.push(paymentLine);
+    
+    // Total
+    lines.push(`TOTAL: ₱${totalPrice}`);
+    lines.push(''); // Break before payment receipt
+    
+    // Payment Receipt
+    lines.push('PAYMENT RECEIPT:');
+    if (receiptImageUrl) {
+      lines.push(receiptImageUrl);
+    }
+    
+    return lines.join('\n');
   };
 
   const handleCopyMessage = async () => {
     try {
-      const message = generateOrderMessage();
+      const message = await generateOrderMessage();
       await navigator.clipboard.writeText(message);
       setCopied(true);
       setHasCopiedMessage(true); // Mark that copy button has been clicked
@@ -407,7 +516,7 @@ Please confirm this order to proceed. Thank you for choosing AmberKin! 🎮
     }
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (!paymentMethod) {
       setReceiptError('Please select a payment method');
       return;
@@ -418,7 +527,7 @@ Please confirm this order to proceed. Thank you for choosing AmberKin! 🎮
       return;
     }
 
-    const orderDetails = generateOrderMessage();
+    const orderDetails = await generateOrderMessage();
     const encodedMessage = encodeURIComponent(orderDetails);
     const messengerUrl = `https://m.me/AmberKinGamerXtream?text=${encodedMessage}`;
     

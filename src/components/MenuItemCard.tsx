@@ -73,7 +73,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     <>
       <div 
         onClick={handleCardClick}
-        className={`flex flex-row items-center transition-all duration-300 group rounded-xl p-2.5 md:p-3 gap-2 md:gap-3 ${!item.available ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+        className={`relative flex flex-row items-center transition-all duration-300 group rounded-xl p-2.5 md:p-3 gap-2 md:gap-3 ${!item.available ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
         style={{
           background: '#1E7ACB',
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
@@ -96,6 +96,12 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           }
         }}
       >
+        {/* Close Text Overlay for unavailable items */}
+        {!item.available && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl z-10">
+            <span className="text-white font-bold text-lg sm:text-xl opacity-90">Close</span>
+          </div>
+        )}
         {/* Square Game Icon on Left */}
         <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-cafe-darkCard to-cafe-darkBg transition-transform duration-300 group-hover:scale-105">
           {item.image ? (
@@ -114,12 +120,6 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           <div className={`absolute inset-0 flex items-center justify-center ${item.image ? 'hidden' : ''}`}>
             <div className="text-4xl opacity-20 text-gray-400">🎮</div>
           </div>
-          {/* X Icon Overlay for unavailable items */}
-          {!item.available && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg">
-              <X className="w-8 h-8 sm:w-10 sm:h-10 text-white opacity-90" strokeWidth={3} />
-            </div>
-          )}
         </div>
         
         {/* Game Name and Info on Right */}
