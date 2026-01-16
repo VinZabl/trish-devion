@@ -381,15 +381,18 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack, onNa
     // Check if using bulk input
     const isBulkInput = bulkSelectedGames.length > 0 && bulkInputValues && Object.keys(bulkInputValues).length > 0;
 
-    // Extract games list
-    const gamesList = Array.from(new Set(cartItems.map(item => item.name)));
+    // Get the game name (use first game if multiple, or single game name)
+    const gameName = cartItems.length > 0 ? cartItems[0].name : '';
 
-    // Build order items list and IGN/ID & SERVER section
-    let orderItems: string[] = [];
-    let idAndServerSection = '';
+    // Build order message sections
+    let messageSections: string[] = [];
     
     if (isMultipleAccounts) {
-      // Multiple accounts mode: show each item with its ID & SERVER
+      // Multiple accounts mode: show game name once, then each item with ID & SERVER
+      const firstItem = cartItems[0];
+      const gameNameForMulti = firstItem.name;
+      
+      // Build sections for each order item (without repeating game name)
       cartItems.forEach((item, index) => {
         const gameId = getOriginalMenuItemId(item.id);
         const variationId = item.selectedVariation?.id || 'none';
@@ -399,14 +402,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack, onNa
           acc => acc.gameId === gameId && acc.variationId === variationId
         );
         
-        let itemLine = `${item.name}`;
-        if (item.selectedVariation) {
-          itemLine += ` (${item.selectedVariation.name})`;
-        }
-        itemLine += ` x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
-        orderItems.push(itemLine);
-        
-        // Add ID & SERVER for this package
+        // Get ID & SERVER for this package
+        let idAndServer = '';
         if (accountData && accountData.items[0]?.customFields) {
           const firstItem = accountData.items[0];
           const allFieldValues: string[] = [];
@@ -420,121 +417,104 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack, onNa
           });
           
           // Build ID & SERVER string
-          // Only show "&" if there are 2 or more input fields
-          let idAndServer = '';
           if (allFieldValues.length === 1) {
-            // Only 1 field - no "&"
             idAndServer = allFieldValues[0];
           } else if (allFieldValues.length >= 2) {
-            // 2 or more fields - use "&" between them
             idAndServer = allFieldValues.join(' & ');
           }
-          
-          if (idAndServer) {
-            orderItems.push(`ID & SERVER: ${idAndServer}`);
-          }
         }
         
-        // Add a blank line after each order item (except the last one)
-        if (index < cartItems.length - 1) {
-          orderItems.push('');
+        // Build section for this item
+        const packageName = item.selectedVariation?.name || '';
+        const orderLine = `ORDER: ${packageName} x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
+        
+        // First item includes game name, subsequent items don't
+        if (index === 0) {
+          const section = `GAME: ${gameNameForMulti}
+ID & SERVER: ${idAndServer || ''}
+${orderLine}`;
+          messageSections.push(section);
+        } else {
+          const section = `ID & SERVER: ${idAndServer || ''}
+${orderLine}`;
+          messageSections.push(section);
         }
       });
-    } else if (isBulkInput) {
-      // Bulk input mode: show items normally, IGN/ID & SERVER shown separately
-      orderItems = cartItems.map(item => {
-        let itemDetails = `${item.name}`;
-        if (item.selectedVariation) {
-          itemDetails += ` (${item.selectedVariation.name})`;
-        }
-        itemDetails += ` x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
-        return itemDetails;
-      });
-      
-      // Get bulk input values for IGN/ID & SERVER
-      const bulkValues: string[] = [];
-      if (bulkInputFields.length > 0) {
-        bulkInputFields.forEach(({ index }) => {
-          const value = bulkInputValues[index.toString()] || '';
-          if (value) {
-            bulkValues.push(value);
-          }
-        });
-      }
-      
-      // Build IGN/ID & SERVER string
-      if (bulkValues.length === 1) {
-        idAndServerSection = bulkValues[0];
-      } else if (bulkValues.length >= 2) {
-        idAndServerSection = bulkValues.join(' & ');
-      }
     } else {
-      // Single account mode: show items normally
-      orderItems = cartItems.map(item => {
-        let itemDetails = `${item.name}`;
-        if (item.selectedVariation) {
-          itemDetails += ` (${item.selectedVariation.name})`;
-        }
-        itemDetails += ` x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
-        return itemDetails;
-      });
+      // Single account or bulk input mode: one section
+      // Get ID & SERVER
+      let idAndServerSection = '';
       
-      // Get IGN/ID & SERVER for single account mode
-      if (hasAnyCustomFields) {
-        const allFieldValues: string[] = [];
-        itemsWithCustomFields.forEach(item => {
-          const originalId = getOriginalMenuItemId(item.id);
-          item.customFields?.forEach(field => {
-            const valueKey = `${originalId}_${field.key}`;
-            const value = customFieldValues[valueKey] || '';
+      if (isBulkInput) {
+        // Get bulk input values for IGN/ID & SERVER
+        const bulkValues: string[] = [];
+        if (bulkInputFields.length > 0) {
+          bulkInputFields.forEach(({ index }) => {
+            const value = bulkInputValues[index.toString()] || '';
             if (value) {
-              allFieldValues.push(value);
+              bulkValues.push(value);
             }
           });
-        });
+        }
         
-        if (allFieldValues.length === 1) {
-          idAndServerSection = allFieldValues[0];
-        } else if (allFieldValues.length >= 2) {
-          idAndServerSection = allFieldValues.join(' & ');
+        if (bulkValues.length === 1) {
+          idAndServerSection = bulkValues[0];
+        } else if (bulkValues.length >= 2) {
+          idAndServerSection = bulkValues.join(' & ');
         }
       } else {
-        // Default IGN field
-        const defaultIgn = customFieldValues['default_ign'] || '';
-        if (defaultIgn) {
-          idAndServerSection = defaultIgn;
+        // Single account mode
+        if (hasAnyCustomFields) {
+          const allFieldValues: string[] = [];
+          itemsWithCustomFields.forEach(item => {
+            const originalId = getOriginalMenuItemId(item.id);
+            item.customFields?.forEach(field => {
+              const valueKey = `${originalId}_${field.key}`;
+              const value = customFieldValues[valueKey] || '';
+              if (value) {
+                allFieldValues.push(value);
+              }
+            });
+          });
+          
+          if (allFieldValues.length === 1) {
+            idAndServerSection = allFieldValues[0];
+          } else if (allFieldValues.length >= 2) {
+            idAndServerSection = allFieldValues.join(' & ');
+          }
+        } else {
+          // Default IGN field
+          const defaultIgn = customFieldValues['default_ign'] || '';
+          if (defaultIgn) {
+            idAndServerSection = defaultIgn;
+          }
         }
       }
+      
+      // Build order items (just package names)
+      const orderLines = cartItems.map(item => {
+        const packageName = item.selectedVariation?.name || item.name;
+        return `ORDER: ${packageName} x${item.quantity} - ₱${item.totalPrice * item.quantity}`;
+      });
+      
+      // Build single section
+      const section = `GAME: ${gameName}
+ID & SERVER: ${idAndServerSection || ''}
+${orderLines.join('\n')}`;
+      
+      messageSections.push(section);
     }
 
     // Format the message according to the new structure
+    // Join sections with single newline (no double breaks between items)
     let orderDetails = `INVOICE # ${invoiceDisplay}
 
-GAME: ${gamesList.join(', ')}`;
-
-    // Add IGN/ID & SERVER section if available (for bulk input or single account)
-    if (idAndServerSection && !isMultipleAccounts) {
-      // Determine the field label - check if it's IGN or ID & SERVER
-      let fieldLabel = 'IGN';
-      if (hasAnyCustomFields && itemsWithCustomFields.length > 0) {
-        const firstItem = itemsWithCustomFields[0];
-        const hasIdField = firstItem.customFields?.some(f => f.label.toLowerCase().includes('id'));
-        const hasServerField = firstItem.customFields?.some(f => f.label.toLowerCase().includes('server'));
-        if (hasIdField || hasServerField) {
-          fieldLabel = 'ID & SERVER';
-        }
-      }
-      orderDetails += `\n\n${fieldLabel}: ${idAndServerSection}`;
-    }
-
-    orderDetails += `\n\nORDER: 
-${orderItems.join('\n')}
+${messageSections.join('\n')}
 
 PAYMENT: ${selectedPaymentMethod?.name || 'N/A'}
-
 TOTAL: ₱${totalPrice}
 
-PAYMENT RECEIPT: ${receiptImageUrl || 'N/A'}`;
+PAYMENT RECEIPT: ${receiptImageUrl || ''}`;
 
     return orderDetails;
   };
