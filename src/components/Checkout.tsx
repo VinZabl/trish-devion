@@ -295,15 +295,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack, onNa
         customFieldsSection = sections.join('\n');
       }
     } else {
-      customFieldsSection = `🎮 IGN: ${customFieldValues['default_ign'] || ''}`;
+      customFieldsSection = `IGN: ${customFieldValues['default_ign'] || ''}`;
     }
 
     const orderDetails = `
-🛒 Diginix ORDER
-
 ${customFieldsSection}
 
-📋 ORDER DETAILS:
+ORDER DETAILS:
 ${cartItems.map(item => {
   let itemDetails = `• ${item.name}`;
   if (item.selectedVariation) {
@@ -313,13 +311,11 @@ ${cartItems.map(item => {
   return itemDetails;
 }).join('\n')}
 
-💰 TOTAL: ₱${totalPrice}
+TOTAL: ₱${totalPrice}
 
-💳 Payment: ${selectedPaymentMethod?.name || ''}
+Payment: ${selectedPaymentMethod?.name || ''}
 
-📸 Payment Receipt: ${receiptImageUrl || ''}
-
-Please confirm this order to proceed. Thank you for choosing Diginix! 🎮
+Payment Receipt: ${receiptImageUrl || ''}
     `.trim();
 
     return orderDetails;
