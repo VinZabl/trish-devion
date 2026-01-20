@@ -7,18 +7,40 @@ export const useOrders = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch all orders
-  const fetchOrders = async () => {
+  // Fetch all orders (optimized - only fetch essential fields, limit to recent orders)
+  const fetchOrders = async (limit: number = 100, since?: string) => {
     try {
       setLoading(true);
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, status, total_price, payment_method_id, created_at, updated_at, member_id, order_option, order_items, customer_info, receipt_url')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // If since is provided, only fetch orders newer than that
+      if (since) {
+        query = query.gt('created_at', since);
+      }
+
+      const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
 
-      setOrders(data || []);
+      if (since && data && data.length > 0) {
+        // Append new orders to the beginning, keep only the most recent 100
+        setOrders(prev => {
+          const combined = [...(data as Order[]), ...prev];
+          // Remove duplicates by id
+          const unique = combined.filter((order, index, self) => 
+            index === self.findIndex(o => o.id === order.id)
+          );
+          // Keep only the most recent 100
+          return unique.slice(0, limit);
+        });
+      } else {
+        // Initial fetch or full refresh
+        setOrders((data || []) as Order[]);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch orders');
@@ -66,9 +88,16 @@ export const useOrders = () => {
 
       if (createError) throw createError;
 
-      // Refresh orders list if we're in admin view
-      if (orders.length > 0) {
-        await fetchOrders();
+      // Add new order to the list if we're in admin view
+      if (orders.length > 0 && data) {
+        setOrders(prev => {
+          const updated = [data as Order, ...prev];
+          // Keep only the most recent 100
+          return updated.slice(0, 100);
+        });
+      } else if (orders.length === 0) {
+        // If no orders loaded, fetch initial set
+        await fetchOrders(100);
       }
 
       return data;
@@ -89,8 +118,12 @@ export const useOrders = () => {
 
       if (updateError) throw updateError;
 
-      // Refresh orders list
-      await fetchOrders();
+      // Update the specific order in the list
+      if (orders.length > 0) {
+        setOrders(prev => prev.map(order => 
+          order.id === orderId ? { ...order, status } : order
+        ));
+      }
 
       return true;
     } catch (err) {
@@ -100,8 +133,13 @@ export const useOrders = () => {
     }
   };
 
-  // Subscribe to order updates (real-time)
+  // Subscribe to order updates (real-time) - only if orders are already loaded
   useEffect(() => {
+    if (orders.length === 0) return;
+    
+    const mostRecentOrder = orders[0];
+    const mostRecentDate = mostRecentOrder?.created_at;
+    
     const channel = supabase
       .channel('orders-changes')
       .on(
@@ -111,8 +149,25 @@ export const useOrders = () => {
           schema: 'public',
           table: 'orders',
         },
-        () => {
-          fetchOrders();
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // Only fetch new orders created after our most recent
+            if (mostRecentDate) {
+              fetchOrders(100, mostRecentDate);
+            } else {
+              // Fallback: fetch all if we don't have a date
+              fetchOrders(100);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            // Update the specific order in the list
+            const updatedOrder = payload.new as Order;
+            setOrders(prev => prev.map(order => 
+              order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            // Remove deleted order from list
+            setOrders(prev => prev.filter(order => order.id !== payload.old.id));
+          }
         }
       )
       .subscribe();
@@ -120,7 +175,7 @@ export const useOrders = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [orders.length, orders[0]?.created_at]);
 
   return {
     orders,

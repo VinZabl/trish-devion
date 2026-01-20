@@ -1,7 +1,10 @@
 export interface Variation {
   id: string;
   name: string;
-  price: number;
+  price: number; // Default/Regular price (for unregistered users)
+  member_price?: number; // Price for registered members
+  reseller_price?: number; // Price for resellers
+  credits_amount?: number; // Credits/Amount value
   description?: string;
   sort_order?: number;
   category?: string;
@@ -160,7 +163,7 @@ export interface MemberDiscount {
 export interface CreateMemberData {
   username: string;
   email: string;
-  mobile_no: string;
+  mobile_no?: string;
   password: string;
 }
 

@@ -1,84 +1,52 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Users, Trophy, Settings, Edit, Save, X, Plus, Trash2, ChevronDown, ChevronUp, CheckCircle, History, ArrowLeft } from 'lucide-react';
-import { useMembers, TopMember } from '../hooks/useMembers';
-import { useMemberDiscounts } from '../hooks/useMemberDiscounts';
-import { useMenu } from '../hooks/useMenu';
-import { Member, MemberStatus, MemberUserType, Order } from '../types';
-import { MenuItem, Variation } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Users, Trophy, ArrowLeft, X, Search, Eye, Filter } from 'lucide-react';
+import { useMembers } from '../hooks/useMembers';
+import { Member, MemberUserType, Order } from '../types';
 import { supabase } from '../lib/supabase';
 
 const MemberDashboard: React.FC = () => {
   const { members, topMembers, loading, fetchMembers, updateMember } = useMembers();
-  const { menuItems } = useMenu();
-  const { fetchDiscountsByGame, setDiscount, deleteDiscount } = useMemberDiscounts();
   
-  const [activeTab, setActiveTab] = useState<'top' | 'manage' | 'discounts'>('top');
+  const [activeTab, setActiveTab] = useState<'top' | 'manage'>('top');
   const [memberFilter, setMemberFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [selectedGame, setSelectedGame] = useState<MenuItem | null>(null);
-  const [gameDiscounts, setGameDiscounts] = useState<any[]>([]);
-  const [editingDiscount, setEditingDiscount] = useState<string | null>(null);
-  const [editingAll, setEditingAll] = useState(false);
-  const [selectAllGames, setSelectAllGames] = useState(false);
-  const [discountTarget, setDiscountTarget] = useState<'resellers' | 'members'>('resellers');
+  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'end_user' | 'reseller'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   const [viewingMemberOrders, setViewingMemberOrders] = useState<Member | null>(null);
   const [memberOrders, setMemberOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [memberOrderCounts, setMemberOrderCounts] = useState<Record<string, number>>({});
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [allDiscountFormData, setAllDiscountFormData] = useState<{
-    discount_percentage: number;
-    capital_price: number;
-    selling_price: number;
-  }>({
-    discount_percentage: 0,
-    capital_price: 0,
-    selling_price: 0
-  });
-  const [discountFormData, setDiscountFormData] = useState<Record<string, {
-    discount_percentage: number;
-    capital_price: number;
-    selling_price: number;
-  }>>({});
   
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Show notification and auto-hide after 3 seconds
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => {
-      setNotification(null);
-    }, 3000);
-  };
+  // Filter and search members
+  const filteredMembers = useMemo(() => {
+    return members.filter(member => {
+      // Search filter
+      if (searchQuery.trim() !== '') {
+        const query = searchQuery.toLowerCase().trim();
+        if (!member.username.toLowerCase().includes(query)) {
+          return false;
+        }
+      }
 
-  useEffect(() => {
-    if (selectedMember && selectedGame) {
-      loadGameDiscounts();
-    } else if (selectedGame && !selectAllGames && (discountTarget === 'resellers' || discountTarget === 'members')) {
-      // Initialize game discounts for bulk operations
-      const variationDiscounts = (selectedGame.variations || []).map(variation => ({
-        variation_id: variation.id,
-        variation_name: variation.name,
-        existing: null,
-        discount_percentage: 0,
-        capital_price: 0,
-        selling_price: variation.price
-      }));
-      setGameDiscounts(variationDiscounts);
-    }
-  }, [selectedMember, selectedGame, selectAllGames, discountTarget]);
+      // Status filter
+      if (memberFilter === 'active' && member.status !== 'active') return false;
+      if (memberFilter === 'inactive' && member.status !== 'inactive') return false;
 
-  // Refresh members list when switching to discounts tab to ensure fresh data
-  useEffect(() => {
-    if (activeTab === 'discounts') {
-      fetchMembers();
-    }
-  }, [activeTab, fetchMembers]);
+      // User type filter
+      if (userTypeFilter === 'end_user' && member.user_type !== 'end_user') return false;
+      if (userTypeFilter === 'reseller' && member.user_type !== 'reseller') return false;
 
-  // Fetch order counts for all members
+      return true;
+    });
+  }, [members, searchQuery, memberFilter, userTypeFilter]);
+
+  // Fetch order counts for all members (optimized - only fetch member_id)
   useEffect(() => {
     const fetchOrderCounts = async () => {
       try {
+        // Only select member_id column, not full order data
         const { data, error } = await supabase
           .from('orders')
           .select('member_id')
@@ -104,15 +72,17 @@ const MemberDashboard: React.FC = () => {
     }
   }, [activeTab, members]);
 
-  // Fetch orders for a specific member
-  const fetchMemberOrders = async (memberId: string) => {
+  // Fetch orders for a specific member (optimized - limit and select only needed fields)
+  const fetchMemberOrders = async (memberId: string, limit: number = 50) => {
     try {
       setLoadingOrders(true);
+      // Only fetch essential fields, limit results
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('id, status, total_price, payment_method_id, created_at, updated_at, order_option, order_items, customer_info')
         .eq('member_id', memberId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
       if (error) throw error;
       setMemberOrders(data as Order[]);
@@ -151,167 +121,9 @@ const MemberDashboard: React.FC = () => {
     }
   };
 
-  const loadGameDiscounts = async () => {
-    if (!selectedMember || !selectedGame) return;
-    
-    const discounts = await fetchDiscountsByGame(selectedMember.id, selectedGame.id);
-    
-    // Create discount entries for all variations
-    const discountMap: Record<string, any> = {};
-    discounts.forEach(d => {
-      const key = d.variation_id || 'base';
-      discountMap[key] = d;
-    });
-
-    const variationDiscounts = (selectedGame.variations || []).map(variation => {
-      const existing = discountMap[variation.id];
-      return {
-        variation_id: variation.id,
-        variation_name: variation.name,
-        existing: existing,
-        discount_percentage: existing?.discount_percentage || 0,
-        capital_price: existing?.capital_price || 0,
-        selling_price: existing?.selling_price || variation.price
-      };
-    });
-
-    setGameDiscounts(variationDiscounts);
-  };
-
-  const handleSetDiscount = async (variationId: string) => {
-    if (!selectedGame) return;
-
-    const formData = discountFormData[variationId];
-    if (!formData) return;
-
-    // Apply to all target members (resellers or members)
-    const targetMembers = discountTarget === 'resellers' 
-      ? members.filter(m => m.user_type === 'reseller' && m.status === 'active')
-      : members.filter(m => m.user_type === 'end_user' && m.status === 'active');
-
-    let totalSuccess = 0;
-    let totalAttempts = targetMembers.length;
-
-    for (const member of targetMembers) {
-      const success = await setDiscount(
-        member.id,
-        selectedGame.id,
-        variationId,
-        formData
-      );
-      if (success) totalSuccess++;
-    }
-
-    setEditingDiscount(null);
-    
-    // Refresh the table
-    if (selectedGame) {
-      const variationDiscounts = (selectedGame.variations || []).map(variation => {
-        const existing = variation.id === variationId ? { discount_percentage: formData.discount_percentage, capital_price: formData.capital_price, selling_price: formData.selling_price } : null;
-        return {
-          variation_id: variation.id,
-          variation_name: variation.name,
-          existing: existing,
-          discount_percentage: existing?.discount_percentage || 0,
-          capital_price: existing?.capital_price || 0,
-          selling_price: existing?.selling_price || variation.price
-        };
-      });
-      setGameDiscounts(variationDiscounts);
-    }
-
-    if (totalSuccess === totalAttempts) {
-      showNotification('success', `Discount saved for ${totalSuccess} ${discountTarget}`);
-    } else {
-      showNotification('error', `Only ${totalSuccess} of ${totalAttempts} discount(s) were saved`);
-    }
-  };
-
-  const handleDeleteDiscount = async (variationId: string) => {
-    if (!selectedGame) return;
-    
-    // Delete from all target members
-    const targetMembers = discountTarget === 'resellers' 
-      ? members.filter(m => m.user_type === 'reseller' && m.status === 'active')
-      : members.filter(m => m.user_type === 'end_user' && m.status === 'active');
-
-    let totalSuccess = 0;
-    let totalAttempts = 0;
-
-    for (const member of targetMembers) {
-      // Fetch existing discount for this member and variation
-      const discounts = await fetchDiscountsByGame(member.id, selectedGame.id);
-      const existingDiscount = discounts.find(d => d.variation_id === variationId);
-      
-      if (existingDiscount) {
-        totalAttempts++;
-        const success = await deleteDiscount(existingDiscount.id, member.id);
-        if (success) totalSuccess++;
-      }
-    }
-
-    // Refresh the table
-    if (selectedGame) {
-      const variationDiscounts = (selectedGame.variations || []).map(variation => ({
-        variation_id: variation.id,
-        variation_name: variation.name,
-        existing: variation.id === variationId ? null : (gameDiscounts.find(gd => gd.variation_id === variation.id)?.existing || null),
-        discount_percentage: variation.id === variationId ? 0 : (gameDiscounts.find(gd => gd.variation_id === variation.id)?.discount_percentage || 0),
-        capital_price: variation.id === variationId ? 0 : (gameDiscounts.find(gd => gd.variation_id === variation.id)?.capital_price || 0),
-        selling_price: variation.id === variationId ? variation.price : (gameDiscounts.find(gd => gd.variation_id === variation.id)?.selling_price || variation.price)
-      }));
-      setGameDiscounts(variationDiscounts);
-    }
-
-    if (totalSuccess > 0) {
-      showNotification('success', `Discount deleted from ${totalSuccess} ${discountTarget}`);
-    } else {
-      showNotification('error', 'No discounts found to delete');
-    }
-  };
-
-  const handleDeleteAllDiscounts = async () => {
-    if (!selectedMember) return;
-    
-    // Get all existing discounts
-    const discountsToDelete = gameDiscounts.filter(d => d.existing);
-    
-    if (discountsToDelete.length === 0) {
-      showNotification('error', 'No discounts to delete');
-      return;
-    }
-    
-    if (confirm(`Are you sure you want to delete all ${discountsToDelete.length} discount(s) for this game?`)) {
-      // Delete all discounts
-      let successCount = 0;
-      for (const discount of discountsToDelete) {
-        if (discount.existing) {
-          const success = await deleteDiscount(discount.existing.id, selectedMember.id);
-          if (success) successCount++;
-        }
-      }
-      
-      await loadGameDiscounts();
-      setEditingAll(false);
-      if (successCount === discountsToDelete.length) {
-        showNotification('success', `All ${successCount} discount(s) deleted successfully`);
-      } else {
-        showNotification('error', `Only ${successCount} of ${discountsToDelete.length} discount(s) were deleted`);
-      }
-    }
-  };
-
   return (
     <div className="space-y-6 relative">
-      {/* Notification */}
-      {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center space-x-2 px-4 py-3 rounded-lg shadow-lg ${
-          notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          <CheckCircle className="h-5 w-5" />
-          <span className="font-medium">{notification.message}</span>
-        </div>
-      )}
+
       {/* Quick Actions - Same style as customer section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
@@ -345,21 +157,6 @@ const MemberDashboard: React.FC = () => {
             >
               <Users className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
               <span className="text-sm md:text-base font-medium text-gray-900">Manage Members</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('discounts');
-                // Scroll to content on mobile
-                setTimeout(() => {
-                  contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-              }}
-              className={`w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200 ${
-                activeTab === 'discounts' ? 'bg-blue-50' : ''
-              }`}
-            >
-              <Settings className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-              <span className="text-sm md:text-base font-medium text-gray-900">Set Discounts</span>
             </button>
           </div>
         </div>
@@ -430,80 +227,141 @@ const MemberDashboard: React.FC = () => {
         {/* Manage Members Tab */}
         {activeTab === 'manage' && (
           <>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-            <h3 className="text-lg md:text-xl font-bold text-gray-900">All Members</h3>
-            <div className="flex flex-wrap gap-2">
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg md:text-xl font-bold text-gray-900">All Members</h3>
               <button
-                onClick={() => setMemberFilter('all')}
-                className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                  memberFilter === 'all'
-                    ? 'bg-blue-600 text-white'
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showFilters
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                All
-              </button>
-              <button
-                onClick={() => setMemberFilter('active')}
-                className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                  memberFilter === 'active'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Active
-              </button>
-              <button
-                onClick={() => setMemberFilter('inactive')}
-                className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                  memberFilter === 'inactive'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Inactive
+                <Filter className="h-4 w-4" />
+                Filters
               </button>
             </div>
+            
+            {/* Search Bar */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by username..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                />
+              </div>
+            </div>
+
+            {/* Filters Panel - Collapsible */}
+            {showFilters && (
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setMemberFilter('all');
+                      setUserTypeFilter('all');
+                    }}
+                    className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                      memberFilter === 'all' && userTypeFilter === 'all'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setMemberFilter('active')}
+                    className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                      memberFilter === 'active'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setMemberFilter('inactive')}
+                    className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                      memberFilter === 'inactive'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Inactive
+                  </button>
+                  <button
+                    onClick={() => setUserTypeFilter('end_user')}
+                    className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                      userTypeFilter === 'end_user'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Members
+                  </button>
+                  <button
+                    onClick={() => setUserTypeFilter('reseller')}
+                    className={`px-3 py-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors ${
+                      userTypeFilter === 'reseller'
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Resellers
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           {loading ? (
             <div className="text-gray-600">Loading...</div>
+          ) : filteredMembers.length === 0 ? (
+            <div className="text-gray-600 text-center py-8">
+              {searchQuery.trim() !== '' 
+                ? `No members found matching "${searchQuery}"`
+                : 'No members found with the selected filters'}
+            </div>
           ) : (
             <>
+              {/* Results Count */}
+              <div className="mb-4 text-sm text-gray-600">
+                Showing {filteredMembers.length} of {members.length} member(s)
+              </div>
+
               {/* Mobile Card View */}
               <div className="md:hidden space-y-3">
-                {members
-                  .filter(member => {
-                    if (memberFilter === 'all') return true;
-                    if (memberFilter === 'active') return member.status === 'active';
-                    if (memberFilter === 'inactive') return member.status === 'inactive';
-                    return true;
-                  })
-                  .map((member) => (
+                {filteredMembers.map((member) => (
                     <div
                       key={member.id}
-                      onClick={() => handleViewMemberOrders(member)}
-                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 active:bg-gray-100 transition-colors"
+                      className="bg-gray-50 rounded-lg p-4 border border-gray-200"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900 mb-1">{member.username}</h4>
-                          <p className="text-sm text-gray-600 mb-2">{member.mobile_no}</p>
-                          <div className="flex items-center gap-2 mb-2">
+                      <div className="mb-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${
+                              member.status === 'active'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {member.status}
+                          </span>
+                          <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">Orders:</span>
                             <span className="font-semibold text-gray-900">{memberOrderCounts[member.id] || 0}</span>
                           </div>
                         </div>
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            member.status === 'active'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {member.status}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 mb-1 truncate">{member.username}</h4>
+                          <p className="text-xs text-gray-600 truncate">{member.email}</p>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-2 pt-3 border-t border-gray-200">
+                      <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
                         <select
                           value={member.user_type}
                           onChange={async (e) => {
@@ -513,15 +371,10 @@ const MemberDashboard: React.FC = () => {
                             });
                             if (success) {
                               await fetchMembers();
-                              if (selectedMember?.id === member.id && e.target.value === 'end_user') {
-                                setSelectedMember(null);
-                                setSelectedGame(null);
-                                setGameDiscounts([]);
-                              }
                             }
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-gray-900 text-sm"
+                          className="flex-1 bg-white border border-gray-300 rounded px-3 py-2 text-gray-900 text-sm"
                         >
                           <option value="end_user">End User</option>
                           <option value="reseller">Reseller</option>
@@ -533,13 +386,23 @@ const MemberDashboard: React.FC = () => {
                               status: member.status === 'active' ? 'inactive' : 'active'
                             });
                           }}
-                          className={`w-full px-3 py-2 rounded text-sm font-semibold ${
+                          className={`px-3 py-2 rounded text-xs font-semibold whitespace-nowrap ${
                             member.status === 'active'
                               ? 'bg-red-100 text-red-800 active:bg-red-200'
                               : 'bg-green-100 text-green-800 active:bg-green-200'
                           }`}
                         >
                           {member.status === 'active' ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewMemberOrders(member);
+                          }}
+                          className="p-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 active:bg-blue-300 transition-colors"
+                          title="View Orders"
+                        >
+                          <Eye className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
@@ -552,7 +415,7 @@ const MemberDashboard: React.FC = () => {
                   <thead>
                     <tr className="border-b border-gray-300">
                       <th className="text-left p-3 text-gray-900 font-semibold">Username</th>
-                      <th className="text-left p-3 text-gray-900 font-semibold">Mobile No.</th>
+                      <th className="text-left p-3 text-gray-900 font-semibold">Email</th>
                       <th className="text-center p-3 text-gray-900 font-semibold">Total Orders</th>
                       <th className="text-left p-3 text-gray-900 font-semibold">Status</th>
                       <th className="text-left p-3 text-gray-900 font-semibold">User Type</th>
@@ -560,21 +423,13 @@ const MemberDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {members
-                      .filter(member => {
-                        if (memberFilter === 'all') return true;
-                        if (memberFilter === 'active') return member.status === 'active';
-                        if (memberFilter === 'inactive') return member.status === 'inactive';
-                        return true;
-                      })
-                      .map((member) => (
+                    {filteredMembers.map((member) => (
                       <tr 
                         key={member.id} 
-                        className="border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => handleViewMemberOrders(member)}
+                        className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                       >
                         <td className="p-3 text-gray-900">{member.username}</td>
-                        <td className="p-3 text-gray-900">{member.mobile_no}</td>
+                        <td className="p-3 text-gray-900">{member.email}</td>
                         <td className="p-3 text-gray-900 font-semibold text-center">{memberOrderCounts[member.id] || 0}</td>
                         <td className="p-3">
                           <span
@@ -597,11 +452,6 @@ const MemberDashboard: React.FC = () => {
                               });
                               if (success) {
                                 await fetchMembers();
-                                if (selectedMember?.id === member.id && e.target.value === 'end_user') {
-                                  setSelectedMember(null);
-                                  setSelectedGame(null);
-                                  setGameDiscounts([]);
-                                }
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -627,6 +477,16 @@ const MemberDashboard: React.FC = () => {
                               }`}
                             >
                               {member.status === 'active' ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewMemberOrders(member);
+                              }}
+                              className="p-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
+                              title="View Orders"
+                            >
+                              <Eye className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
@@ -757,446 +617,8 @@ const MemberDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Set Discounts Tab */}
-        {activeTab === 'discounts' && (
-          <>
-          <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-4">Set Member Discounts</h3>
-          
-          {/* Member and Game Selection - Row on desktop, stacked on mobile */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
-          {/* Set Discounts To Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">Set Discounts to?</label>
-            <select
-              value={discountTarget}
-              onChange={(e) => {
-                const target = e.target.value as 'resellers' | 'members';
-                setDiscountTarget(target);
-                setSelectedMember(null);
-                setSelectedGame(null);
-                setGameDiscounts([]);
-              }}
-              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 md:px-4 md:py-3 text-gray-900 mb-4 text-sm md:text-base"
-            >
-              <option value="resellers">Resellers</option>
-              <option value="members">Members</option>
-            </select>
-
-            {/* Display selected target info as subtitle */}
-            {discountTarget === 'resellers' && (
-              <p className="text-xs md:text-sm text-gray-600 mt-1">
-                All Resellers Selected ({members.filter(m => m.user_type === 'reseller' && m.status === 'active').length} active resellers)
-              </p>
-            )}
-
-            {discountTarget === 'members' && (
-              <p className="text-xs md:text-sm text-gray-600 mt-1">
-                All Members Selected ({members.filter(m => m.user_type === 'end_user' && m.status === 'active').length} active end users)
-              </p>
-            )}
           </div>
-
-          {/* Game Selection */}
-          {(discountTarget === 'resellers' || discountTarget === 'members') && (
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">Choose Game</label>
-              <div className="flex items-center gap-3 mb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectAllGames}
-                    onChange={(e) => {
-                      setSelectAllGames(e.target.checked);
-                      if (e.target.checked) {
-                        setSelectedGame(null);
-                        setEditingAll(true);
-                        setAllDiscountFormData({
-                          discount_percentage: 0,
-                          capital_price: 0,
-                          selling_price: 0
-                        });
-                      } else {
-                        setEditingAll(false);
-                      }
-                    }}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-900">Select All Games</span>
-                </label>
               </div>
-              {!selectAllGames && (
-                <select
-                  value={selectedGame?.id || ''}
-                  onChange={(e) => {
-                    const game = menuItems.find(m => m.id === e.target.value);
-                    setSelectedGame(game || null);
-                    // Initialize game discounts when game is selected
-                    if (game) {
-                      const variationDiscounts = (game.variations || []).map(variation => ({
-                        variation_id: variation.id,
-                        variation_name: variation.name,
-                        existing: null,
-                        discount_percentage: 0,
-                        capital_price: 0,
-                        selling_price: variation.price
-                      }));
-                      setGameDiscounts(variationDiscounts);
-                    } else {
-                      setGameDiscounts([]);
-                    }
-                  }}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 md:px-4 md:py-3 text-gray-900 text-sm md:text-base"
-                >
-                  <option value="">Choose Game</option>
-                  {menuItems.map(game => (
-                    <option key={game.id} value={game.id}>
-                      {game.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-          </div>
-
-          {/* Discount Table / Bulk Discount Form */}
-          {(discountTarget === 'resellers' || discountTarget === 'members') && (selectedGame || selectAllGames) && (
-            <>
-              {/* Edit All Button - Outside scrollable area */}
-              {!editingAll && !selectAllGames && (
-                <div className="flex justify-end mb-4">
-                  <button
-                    onClick={() => {
-                      setEditingAll(true);
-                      // Initialize with default values
-                      setAllDiscountFormData({
-                        discount_percentage: 0,
-                        capital_price: 0,
-                        selling_price: 0
-                      });
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg active:bg-blue-700 hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    Edit All
-                  </button>
-                </div>
-              )}
-
-              <div className="overflow-x-auto">
-                {/* Edit All Section */}
-                {editingAll || selectAllGames ? (
-                  <div className="mb-6">
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-300">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          {selectAllGames ? 'Set Discounts for All Games' : 'Set Discounts for All Packages'}
-                        </h4>
-                        <button
-                          onClick={() => {
-                            setEditingAll(false);
-                            setSelectAllGames(false);
-                            setAllDiscountFormData({
-                              discount_percentage: 0,
-                              capital_price: 0,
-                              selling_price: 0
-                            });
-                          }}
-                          className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors text-sm font-medium"
-                        >
-                          Cancel All
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-                        <div>
-                          <label className="block text-xs md:text-sm font-medium text-gray-900 mb-2">Discount Percentage (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={allDiscountFormData.discount_percentage}
-                            onChange={(e) => {
-                              setAllDiscountFormData(prev => ({
-                                ...prev,
-                                discount_percentage: parseFloat(e.target.value) || 0
-                              }));
-                            }}
-                            className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 md:px-4 md:py-2 text-gray-900 text-sm md:text-base"
-                            placeholder="0"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs md:text-sm font-medium text-gray-900 mb-2">Capital Price (₱)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={allDiscountFormData.capital_price}
-                            onChange={(e) => {
-                              setAllDiscountFormData(prev => ({
-                                ...prev,
-                                capital_price: parseFloat(e.target.value) || 0
-                              }));
-                            }}
-                            className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 md:px-4 md:py-2 text-gray-900 text-sm md:text-base"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs md:text-sm font-medium text-gray-900 mb-2">Selling Price (₱)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={allDiscountFormData.selling_price}
-                            onChange={(e) => {
-                              setAllDiscountFormData(prev => ({
-                                ...prev,
-                                selling_price: parseFloat(e.target.value) || 0
-                              }));
-                            }}
-                            className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 md:px-4 md:py-2 text-gray-900 text-sm md:text-base"
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex justify-end gap-3">
-                        <button
-                          onClick={async () => {
-                            // Apply to all resellers or all members (only active ones)
-                            // Resellers = only resellers, Members = only end users (not resellers)
-                            const targetMembers = discountTarget === 'resellers' 
-                              ? members.filter(m => m.user_type === 'reseller' && m.status === 'active')
-                              : members.filter(m => m.user_type === 'end_user' && m.status === 'active');
-                            
-                            let totalSuccess = 0;
-                            let totalAttempts = 0;
-                            
-                            if (selectAllGames) {
-                              // Apply to all games for all target members
-                              for (const member of targetMembers) {
-                                for (const game of menuItems) {
-                                  const allVariationIds = game.variations?.map(v => v.id) || [];
-                                  for (const variationId of allVariationIds) {
-                                    totalAttempts++;
-                                    const success = await setDiscount(
-                                      member.id,
-                                      game.id,
-                                      variationId,
-                                      allDiscountFormData
-                                    );
-                                    if (success) totalSuccess++;
-                                  }
-                                }
-                              }
-                            } else if (selectedGame) {
-                              // Apply to selected game only
-                              const allVariationIds = selectedGame.variations?.map(v => v.id) || [];
-                              for (const member of targetMembers) {
-                                for (const variationId of allVariationIds) {
-                                  totalAttempts++;
-                                  const success = await setDiscount(
-                                    member.id,
-                                    selectedGame.id,
-                                    variationId,
-                                    allDiscountFormData
-                                  );
-                                  if (success) totalSuccess++;
-                                }
-                              }
-                            }
-                            
-                            setEditingAll(false);
-                            setSelectAllGames(false);
-                            const memberType = discountTarget === 'resellers' ? 'resellers' : 'members';
-                            const gameCount = selectAllGames ? menuItems.length : 1;
-                            if (totalSuccess === totalAttempts) {
-                              showNotification('success', `Discounts saved for all ${targetMembers.length} ${memberType} across ${gameCount} game(s) (${totalSuccess} discount(s))`);
-                            } else {
-                              showNotification('error', `Only ${totalSuccess} of ${totalAttempts} discount(s) were saved`);
-                            }
-                          }}
-                          className="px-4 py-2.5 md:px-6 md:py-2 bg-green-600 text-white rounded-lg active:bg-green-700 hover:bg-green-700 transition-colors text-xs md:text-sm font-medium w-full md:w-auto"
-                        >
-                          {selectAllGames 
-                            ? `Save All Games (${members.filter(m => discountTarget === 'resellers' ? m.user_type === 'reseller' : m.user_type === 'end_user').filter(m => m.status === 'active').length} ${discountTarget === 'resellers' ? 'resellers' : 'members'}, ${menuItems.length} games)`
-                            : discountTarget === 'resellers' 
-                              ? `Save All (${members.filter(m => m.user_type === 'reseller' && m.status === 'active').length} resellers)`
-                              : `Save All (${members.filter(m => m.user_type === 'end_user' && m.status === 'active').length} members)`}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              
-              {/* Packages Table - Only show if not selecting all games */}
-              {!selectAllGames && selectedGame && (
-                <div className="overflow-x-auto mt-6">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="text-left p-3 text-gray-900 font-semibold">Package Name</th>
-                        <th className="text-left p-3 text-gray-900 font-semibold">Original Price</th>
-                        <th className="text-left p-3 text-gray-900 font-semibold">Discount Percentage</th>
-                        <th className="text-left p-3 text-gray-900 font-semibold">Capital Price</th>
-                        <th className="text-left p-3 text-gray-900 font-semibold">Selling Price</th>
-                        <th className="text-left p-3 text-gray-900 font-semibold">Profit</th>
-                        <th className="text-left p-3 text-gray-900 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {gameDiscounts.map((discount) => {
-                        const isEditing = editingDiscount === discount.variation_id;
-                        const formData = discountFormData[discount.variation_id] || {
-                          discount_percentage: discount.discount_percentage,
-                          capital_price: discount.capital_price,
-                          selling_price: discount.selling_price
-                        };
-                        const profit = formData.selling_price - formData.capital_price;
-                        const originalPrice = selectedGame.variations?.find(v => v.id === discount.variation_id)?.price || 0;
-
-                        return (
-                          <tr key={discount.variation_id} className="border-b border-gray-200">
-                            <td className="p-3 text-gray-900">{discount.variation_name}</td>
-                            <td className="p-3 text-gray-900">₱{originalPrice.toFixed(2)}</td>
-                            <td className="p-3">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={formData.discount_percentage}
-                                  onChange={(e) => {
-                                    setDiscountFormData(prev => ({
-                                      ...prev,
-                                      [discount.variation_id]: {
-                                        ...formData,
-                                        discount_percentage: parseFloat(e.target.value) || 0
-                                      }
-                                    }));
-                                  }}
-                                  className="w-20 bg-white border border-gray-300 rounded px-2 py-1 text-gray-900 text-sm"
-                                />
-                              ) : (
-                                <span className="text-gray-900">{discount.discount_percentage}%</span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={formData.capital_price}
-                                  onChange={(e) => {
-                                    setDiscountFormData(prev => ({
-                                      ...prev,
-                                      [discount.variation_id]: {
-                                        ...formData,
-                                        capital_price: parseFloat(e.target.value) || 0
-                                      }
-                                    }));
-                                  }}
-                                  className="w-24 bg-white border border-gray-300 rounded px-2 py-1 text-gray-900 text-sm"
-                                />
-                              ) : (
-                                <span className="text-gray-900">₱{discount.capital_price.toFixed(2)}</span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={formData.selling_price}
-                                  onChange={(e) => {
-                                    setDiscountFormData(prev => ({
-                                      ...prev,
-                                      [discount.variation_id]: {
-                                        ...formData,
-                                        selling_price: parseFloat(e.target.value) || 0
-                                      }
-                                    }));
-                                  }}
-                                  className="w-24 bg-white border border-gray-300 rounded px-2 py-1 text-gray-900 text-sm"
-                                />
-                              ) : (
-                                <span className="text-gray-900">₱{discount.selling_price.toFixed(2)}</span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              <span className="text-green-600 font-semibold">
-                                ₱{profit.toFixed(2)}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex items-center gap-2">
-                                {isEditing ? (
-                                  <>
-                                    <button
-                                      onClick={() => handleSetDiscount(discount.variation_id)}
-                                      className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors"
-                                      title="Save"
-                                    >
-                                      <Save className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setEditingDiscount(null);
-                                        setDiscountFormData(prev => {
-                                          const newData = { ...prev };
-                                          delete newData[discount.variation_id];
-                                          return newData;
-                                        });
-                                      }}
-                                      className="p-1.5 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded transition-colors"
-                                      title="Cancel"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      onClick={() => {
-                                        setEditingDiscount(discount.variation_id);
-                                        setDiscountFormData(prev => ({
-                                          ...prev,
-                                          [discount.variation_id]: {
-                                            discount_percentage: discount.discount_percentage,
-                                            capital_price: discount.capital_price,
-                                            selling_price: discount.selling_price
-                                          }
-                                        }));
-                                      }}
-                                      className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
-                                      title="Edit"
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        if (confirm('Are you sure you want to delete this discount for all selected members?')) {
-                                          handleDeleteDiscount(discount.variation_id);
-                                        }
-                                      }}
-                                      className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                                      title="Delete"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-          </>
-        )}
-      </div>
-    </div>
   );
 };
 

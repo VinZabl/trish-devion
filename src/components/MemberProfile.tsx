@@ -70,21 +70,25 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
   if (!currentMember) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white/10 backdrop-blur-lg rounded-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/20">
-          <h2 className="text-xl font-bold text-cafe-text">Profile</h2>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="glass-card rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-semibold text-cafe-text">Profile</h2>
+            <p className="text-sm text-cafe-textMuted mt-1">
+              {isReseller() ? 'Reseller' : 'Member'} Account
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 glass-strong rounded-lg hover:bg-cafe-primary/20 transition-colors duration-200"
           >
             <X className="h-5 w-5 text-cafe-text" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div>
           {!showOrderHistory ? (
             <>
               {/* User Info */}
@@ -92,10 +96,10 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
                 <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-cafe-primary to-cafe-secondary rounded-full mb-4">
                   <User className="h-10 w-10 text-white" />
                 </div>
-                <h3 className="text-2xl font-bold text-cafe-text mb-2">
+                <h3 className="text-2xl font-semibold text-cafe-text mb-2">
                   {currentMember.username}
                 </h3>
-                <p className="text-cafe-text/70 capitalize">
+                <p className="text-cafe-textMuted capitalize">
                   {isReseller() ? 'Reseller' : 'Member'}
                 </p>
               </div>
@@ -104,23 +108,23 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
               <div className="space-y-3">
                 <button
                   onClick={() => setShowOrderHistory(true)}
-                  className="w-full flex items-center space-x-3 p-4 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-left"
+                  className="w-full flex items-center space-x-3 p-4 glass-strong border border-cafe-primary/30 rounded-lg hover:bg-cafe-primary/20 transition-colors text-left"
                 >
                   <History className="h-5 w-5 text-cafe-primary" />
                   <div className="flex-1">
                     <p className="font-semibold text-cafe-text">Order History</p>
-                    <p className="text-sm text-cafe-text/70">{orders.length} order(s)</p>
+                    <p className="text-sm text-cafe-textMuted">{orders.length} order(s)</p>
                   </div>
                 </button>
 
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center space-x-3 p-4 bg-red-500/30 hover:bg-red-500/40 rounded-lg transition-colors text-left"
+                  className="w-full flex items-center space-x-3 p-4 glass-strong border border-red-500/30 rounded-lg hover:bg-red-500/20 transition-colors text-left"
                 >
                   <LogOut className="h-5 w-5 text-red-400" />
                   <div className="flex-1">
                     <p className="font-semibold text-red-400">Logout</p>
-                    <p className="text-sm text-red-400/70">Sign out of your account</p>
+                    <p className="text-sm text-cafe-textMuted">Sign out of your account</p>
                   </div>
                 </button>
               </div>
@@ -128,29 +132,32 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
           ) : (
             <>
               {/* Order History */}
-              <div className="mb-4">
+              <div className="mb-6">
                 <button
                   onClick={() => setShowOrderHistory(false)}
-                  className="flex items-center space-x-2 text-cafe-text/70 hover:text-cafe-text transition-colors mb-4"
+                  className="flex items-center space-x-2 text-cafe-textMuted hover:text-cafe-text transition-colors mb-4"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   <span>Back to Profile</span>
                 </button>
-                <h3 className="text-xl font-bold text-cafe-text">Order History</h3>
+                <div>
+                  <h3 className="text-2xl font-semibold text-cafe-text">Order History</h3>
+                  <p className="text-sm text-cafe-textMuted mt-1">{orders.length} order(s)</p>
+                </div>
               </div>
 
               {loadingOrders ? (
-                <div className="text-center text-cafe-text/70 py-8">Loading orders...</div>
+                <div className="text-center text-cafe-textMuted py-12">Loading orders...</div>
               ) : orders.length === 0 ? (
-                <div className="text-center text-cafe-text/70 py-8">No orders found.</div>
+                <div className="text-center text-cafe-textMuted py-12">No orders found.</div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {orders.map((order) => (
-                    <div key={order.id} className="bg-white/10 rounded-lg p-4 border border-white/20">
-                      <div className="flex items-start justify-between mb-3">
+                    <div key={order.id} className="glass-strong rounded-lg p-4 border border-cafe-primary/30">
+                      <div className="flex items-start justify-between mb-4">
                         <div className="flex-1 min-w-0">
-                          <p className="font-mono text-sm text-cafe-text mb-1">#{order.id.slice(0, 8)}</p>
-                          <p className="text-xs text-cafe-text/70">{new Date(order.created_at).toLocaleString()}</p>
+                          <p className="font-mono text-sm text-cafe-text mb-1">Order #{order.id.slice(0, 8)}</p>
+                          <p className="text-xs text-cafe-textMuted">{new Date(order.created_at).toLocaleString()}</p>
                         </div>
                         <span
                           className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ml-2 ${getOrderStatusClass(order)}`}
@@ -158,18 +165,59 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
                           {getOrderStatus(order)}
                         </span>
                       </div>
-                      <div className="space-y-2 pt-3 border-t border-white/20">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-cafe-text/70">Items:</span>
-                          <span className="text-cafe-text font-medium">{Array.isArray(order.order_items) ? order.order_items.length : 0} item(s)</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-cafe-text/70">Payment:</span>
-                          <span className="text-cafe-text">{order.payment_method_id || 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between text-sm pt-2 border-t border-white/20">
-                          <span className="text-cafe-text/70 font-medium">Total:</span>
-                          <span className="text-cafe-text font-bold text-lg">₱{order.total_price.toFixed(2)}</span>
+                      
+                      {/* Order Items */}
+                      <div className="space-y-3 mb-4">
+                        <h4 className="font-medium text-cafe-text text-sm">Order Details</h4>
+                        {Array.isArray(order.order_items) && order.order_items.length > 0 ? (
+                          <div className="space-y-3">
+                            {order.order_items.map((item, idx) => (
+                              <div key={idx} className="flex items-start gap-4 py-2 border-b border-cafe-primary/20 last:border-b-0">
+                                <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gradient-to-br from-cafe-darkCard to-cafe-darkBg">
+                                  {item.image ? (
+                                    <img
+                                      src={item.image}
+                                      alt={item.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <div className="text-xl opacity-20 text-gray-400">🎮</div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-medium text-cafe-text text-sm">{item.name}</h4>
+                                  {item.selectedVariation && (
+                                    <p className="text-sm text-cafe-textMuted">Package: {item.selectedVariation.name}</p>
+                                  )}
+                                  {item.selectedAddOns && item.selectedAddOns.length > 0 && (
+                                    <p className="text-sm text-cafe-textMuted">
+                                      Add-ons: {item.selectedAddOns.map(addOn => 
+                                        addOn.quantity && addOn.quantity > 1 
+                                          ? `${addOn.name} x${addOn.quantity}`
+                                          : addOn.name
+                                      ).join(', ')}
+                                    </p>
+                                  )}
+                                  <p className="text-sm text-cafe-textMuted">₱{item.totalPrice} × {item.quantity}</p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <span className="font-semibold text-cafe-text">₱{(item.totalPrice * item.quantity).toFixed(2)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-cafe-textMuted text-sm">No items</p>
+                        )}
+                      </div>
+                      
+                      {/* Total */}
+                      <div className="pt-4 border-t border-cafe-primary/30">
+                        <div className="flex items-center justify-between text-lg font-semibold text-cafe-text">
+                          <span>Total:</span>
+                          <span className="text-white">₱{order.total_price.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>

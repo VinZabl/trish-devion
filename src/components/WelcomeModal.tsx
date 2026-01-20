@@ -9,24 +9,29 @@ interface WelcomeModalProps {
 
 const WelcomeModal: React.FC<WelcomeModalProps> = ({ username, onClose, onGetStarted }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 md:p-8 max-w-md w-full shadow-xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-cafe-text/70 hover:text-cafe-text transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="glass-card rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-semibold text-cafe-text">Welcome {username}!</h2>
+            <p className="text-sm text-cafe-textMuted mt-1">
+              You have successfully logged in
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 glass-strong rounded-lg hover:bg-cafe-primary/20 transition-colors duration-200"
+          >
+            <X className="h-5 w-5 text-cafe-text" />
+          </button>
+        </div>
 
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-cafe-primary to-cafe-secondary rounded-full mb-4">
             <CheckCircle className="h-8 w-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-cafe-text mb-2">
-            Welcome {username}!
-          </h2>
-          <p className="text-cafe-text/70 mb-6">
-            You have successfully logged in. Enjoy exclusive member benefits!
+          <p className="text-cafe-textMuted mb-6">
+            Enjoy exclusive member benefits!
           </p>
           <button
             onClick={() => {

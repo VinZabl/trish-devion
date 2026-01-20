@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, GripVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft } from 'lucide-react';
 import { useCategories, Category } from '../hooks/useCategories';
 
 interface CategoryManagerProps {
@@ -101,7 +101,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
   if (currentView === 'add' || currentView === 'edit') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
+        <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
@@ -110,23 +110,22 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Back</span>
                 </button>
-                <h1 className="text-lg md:text-2xl font-playfair font-semibold text-black">
+                <h1 className="text-xs font-semibold text-black">
                   {currentView === 'add' ? 'Add New Category' : 'Edit Category'}
                 </h1>
               </div>
               <div className="flex space-x-3">
                 <button
                   onClick={handleCancel}
-                  className="px-3 py-1.5 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-2 text-sm md:text-base"
+                  className="px-3 py-1.5 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-2 text-xs"
                 >
                   <X className="h-4 w-4" />
                   <span>Cancel</span>
                 </button>
                 <button
                   onClick={handleSaveCategory}
-                  className="px-3 py-1.5 md:px-4 md:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2 text-sm md:text-base"
+                  className="px-3 py-1.5 md:px-4 md:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2 text-xs"
                 >
                   <Save className="h-4 w-4" />
                   <span>Save</span>
@@ -140,7 +139,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-8">
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-black mb-2">Category Name *</label>
+                <label className="block text-xs font-medium text-black mb-2">Category Name *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -151,7 +150,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-black mb-2">Category ID *</label>
+                <label className="block text-xs font-medium text-black mb-2">Category ID *</label>
                 <input
                   type="text"
                   value={formData.id}
@@ -171,7 +170,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
               {/* Icon field removed as per request */}
 
               <div>
-                <label className="block text-sm font-medium text-black mb-2">Sort Order</label>
+                <label className="block text-xs font-medium text-black mb-2">Sort Order</label>
                 <input
                   type="number"
                   value={formData.sort_order}
@@ -192,7 +191,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                     onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                     className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                   />
-                  <span className="text-sm font-medium text-black">Active Category</span>
+                  <span className="text-xs font-medium text-black">Active Category</span>
                 </label>
               </div>
             </div>
@@ -205,25 +204,25 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
   // List View
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
+      <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <button
                 onClick={onBack}
-                className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm md:text-base"
+                className="text-gray-600 hover:text-black transition-colors duration-200"
+                aria-label="Back to dashboard"
               >
                 <ArrowLeft className="h-5 w-5" />
-                <span>Dashboard</span>
               </button>
-              <h1 className="text-lg md:text-2xl font-playfair font-semibold text-black">Manage Categories</h1>
+              <h1 className="text-black">Manage Categories</h1>
             </div>
             <button
               onClick={handleAddCategory}
-              className="flex items-center space-x-2 bg-black text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm md:text-base"
+              className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-xs"
             >
               <Plus className="h-4 w-4" />
-              <span>Add Category</span>
+              <span>Add</span>
             </button>
           </div>
         </div>
@@ -232,14 +231,14 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-6">
-            <h2 className="text-base md:text-lg font-playfair font-medium text-black mb-4">Categories</h2>
+            <h2 className="text-xs font-playfair font-medium text-black mb-4">Categories</h2>
             
             {categories.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 mb-4">No categories found</p>
                 <button
                   onClick={handleAddCategory}
-                  className="bg-green-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm md:text-base"
+                  className="bg-green-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-xs"
                 >
                   Add First Category
                 </button>
@@ -249,20 +248,10 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                 {categories.map((category) => (
                   <div
                     key={category.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                   >
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-2 text-gray-400 cursor-move">
-                        <GripVertical className="h-4 w-4" />
-                        <span className="text-sm text-gray-500">#{category.sort_order}</span>
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-black">{category.name}</h3>
-                        <p className="text-sm text-gray-500">ID: {category.id}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
+                    {/* Top Row: Status on left, Actions on right */}
+                    <div className="flex items-center justify-between mb-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         category.active 
                           ? 'bg-green-100 text-green-800' 
@@ -271,19 +260,30 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                         {category.active ? 'Active' : 'Inactive'}
                       </span>
                       
-                      <button
-                        onClick={() => handleEditCategory(category)}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors duration-200"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      
-                      <button
-                        onClick={() => handleDeleteCategory(category.id)}
-                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEditCategory(category)}
+                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors duration-200"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        
+                        <button
+                          onClick={() => handleDeleteCategory(category.id)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Bottom Row: Category Info */}
+                    <div className="flex items-center space-x-4">
+                      <span className="text-xs text-gray-500">#{category.sort_order}</span>
+                      <div>
+                        <h3 className="font-medium text-black text-xs">{category.name}</h3>
+                        <p className="text-xs text-gray-500">ID: {category.id}</p>
+                      </div>
                     </div>
                   </div>
                 ))}

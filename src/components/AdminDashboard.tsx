@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, ArrowUpDown, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, Star, Activity, FilePlus, List, FolderTree, Wallet, Cog, Trophy, DollarSign, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, ArrowUpDown, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, Star, Activity, FilePlus, List, FolderTree, Wallet, Cog, Trophy, DollarSign, Clock, Gamepad2 } from 'lucide-react';
 import { MenuItem, Variation, CustomField } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -8,9 +8,8 @@ import CategoryManager from './CategoryManager';
 import PaymentMethodManager from './PaymentMethodManager';
 import SiteSettingsManager from './SiteSettingsManager';
 import OrderManager from './OrderManager';
-import MemberDashboard from './MemberDashboard';
+import MemberManager from './MemberManager';
 import { supabase } from '../lib/supabase';
-import { useMembers } from '../hooks/useMembers';
 
 const AdminDashboard: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -21,12 +20,8 @@ const AdminDashboard: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState<string>('AmberKin@Admin!2025'); // Default fallback
   const { menuItems, loading, addMenuItem, updateMenuItem, deleteMenuItem } = useMenu();
   const { categories } = useCategories();
-  const { members, topMembers } = useMembers();
   const [currentView, setCurrentView] = useState<'dashboard' | 'items' | 'add' | 'edit' | 'categories' | 'payments' | 'settings' | 'orders' | 'members'>('dashboard');
-  const [adminSection, setAdminSection] = useState<'customers' | 'members'>('customers');
-  const [totalSales, setTotalSales] = useState<number>(0);
   const [pendingOrders, setPendingOrders] = useState<number>(0);
-  const [doneOrdersCount, setDoneOrdersCount] = useState<number>(0);
 
   // Fetch admin password from database on mount
   useEffect(() => {
@@ -50,25 +45,11 @@ const AdminDashboard: React.FC = () => {
     fetchAdminPassword();
   }, []);
 
-  // Fetch total sales, pending orders, and done orders
+  // Fetch pending orders
   useEffect(() => {
-    const fetchTotalSales = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('total_price');
-
-        if (error) throw error;
-
-        const sales = data?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
-        setTotalSales(sales);
-      } catch (err) {
-        console.error('Error fetching total sales:', err);
-      }
-    };
-
     const fetchPendingOrders = async () => {
       try {
+        // Only fetch id and order_option, not full order data
         const { data, error } = await supabase
           .from('orders')
           .select('id, order_option')
@@ -88,42 +69,8 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
-    const fetchDoneOrders = async () => {
-      try {
-        // Fetch all orders with member_id
-        const { data, error } = await supabase
-          .from('orders')
-          .select('id, status, order_option, member_id')
-          .not('member_id', 'is', null);
-
-        if (error) throw error;
-
-        // Count orders that are:
-        // 1. status = 'approved' (for regular orders)
-        // 2. status = 'pending' AND order_option = 'order_via_messenger' (for messenger orders)
-        const doneCount = data?.filter(order => {
-          if (order.status === 'approved') {
-            return true;
-          }
-          if (order.status === 'pending' && order.order_option === 'order_via_messenger') {
-            return true;
-          }
-          return false;
-        }).length || 0;
-
-        setDoneOrdersCount(doneCount);
-      } catch (err) {
-        console.error('Error fetching done orders:', err);
-      }
-    };
-
-    if (adminSection === 'members') {
-      fetchTotalSales();
-      fetchDoneOrders();
-    } else {
-      fetchPendingOrders();
-    }
-  }, [adminSection]);
+    fetchPendingOrders();
+  }, []);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -135,6 +82,8 @@ const AdminDashboard: React.FC = () => {
   });
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [priceDiscount, setPriceDiscount] = useState<number | undefined>(undefined);
+  const [resellerDiscount, setResellerDiscount] = useState<number | undefined>(undefined);
   const [formData, setFormData] = useState<Partial<MenuItem>>({
     name: '',
     basePrice: 0,
@@ -155,6 +104,8 @@ const AdminDashboard: React.FC = () => {
   const handleAddItem = () => {
     setCurrentView('add');
     const defaultCategory = categories.length > 0 ? categories[0].id : 'dim-sum';
+    setPriceDiscount(undefined);
+    setResellerDiscount(undefined);
     setFormData({
       name: '',
       basePrice: 0,
@@ -169,6 +120,8 @@ const AdminDashboard: React.FC = () => {
   const handleEditItem = (item: MenuItem) => {
     setEditingItem(item);
     setFormData(item);
+    setPriceDiscount(undefined);
+    setResellerDiscount(undefined);
     setCurrentView('edit');
   };
 
@@ -220,10 +173,10 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
-    // Validate discount percentage if enabled
+    // Validate discount decimal if enabled
     if (formData.discountActive && formData.discountPercentage !== undefined) {
-      if (formData.discountPercentage < 0 || formData.discountPercentage > 100) {
-        alert('Discount percentage must be between 0 and 100');
+      if (formData.discountPercentage < 0 || formData.discountPercentage > 1) {
+        alert('Discount must be between 0 and 1 (e.g., 0.10 for 10%)');
         return;
       }
     }
@@ -402,16 +355,10 @@ const AdminDashboard: React.FC = () => {
 
 
   // Dashboard Stats
-  const totalItems = adminSection === 'members' ? members.length : menuItems.length;
-  const popularItems = adminSection === 'members' 
-    ? (topMembers[1]?.member.username || 'N/A')
-    : menuItems.filter(item => item.popular).length;
-  const availableItems = adminSection === 'members'
-    ? (topMembers[0]?.member.username || 'N/A')
-    : pendingOrders;
-  const doneOrders = adminSection === 'members'
-    ? doneOrdersCount
-    : 'Online';
+  const totalItems = menuItems.length;
+  const popularItems = menuItems.filter(item => item.popular).length;
+  const availableItems = pendingOrders;
+  const doneOrders = 'Online';
   const categoryCounts = categories.map(cat => ({
     ...cat,
     count: menuItems.filter(item => item.category === cat.id).length
@@ -469,23 +416,23 @@ const AdminDashboard: React.FC = () => {
             <div className="mx-auto w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
               <Lock className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-2xl font-playfair font-semibold text-black">Admin Access</h1>
+            <h1 className="text-black">Admin Access</h1>
             <p className="text-gray-600 mt-2">Enter password to access the admin dashboard</p>
           </div>
           
           <form onSubmit={handleLogin}>
             <div className="mb-6">
-              <label className="block text-sm font-medium text-black mb-2">Password</label>
+              <label className="block text-xs font-medium text-black mb-2">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs"
                 placeholder="Enter admin password"
                 required
               />
               {loginError && (
-                <p className="text-red-500 text-sm mt-2">{loginError}</p>
+                <p className="text-red-500 text-xs mt-2">{loginError}</p>
               )}
             </div>
             
@@ -517,32 +464,33 @@ const AdminDashboard: React.FC = () => {
     return (
       <React.Fragment>
       <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
+        <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
                 <button
                   onClick={handleCancel}
-                  className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+                  className="text-gray-600 hover:text-black transition-colors duration-200"
+                  aria-label="Back"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Back</span>
                 </button>
-                <h1 className="text-lg md:text-2xl font-playfair font-semibold text-black">
+                <h1 className="text-black">
                   {currentView === 'add' ? 'Add New Item' : 'Edit Item'}
                 </h1>
               </div>
               <div className="flex space-x-3">
                 <button
                   onClick={handleCancel}
-                  className="px-3 py-1.5 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-2 text-sm md:text-base"
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center justify-center text-xs"
+                  aria-label="Cancel"
+                  title="Cancel"
                 >
                   <X className="h-4 w-4" />
-                  <span>Cancel</span>
                 </button>
                 <button
                   onClick={handleSaveItem}
-                  className="px-3 py-1.5 md:px-4 md:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2 text-sm md:text-base"
+                  className="px-3 py-1.5 md:px-4 md:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2 text-xs"
                 >
                   <Save className="h-4 w-4" />
                   <span>Save</span>
@@ -560,7 +508,7 @@ const AdminDashboard: React.FC = () => {
                 onClick={() => toggleSection('customization')}
                 className="w-full flex items-center justify-between text-left mb-4 hover:opacity-80 transition-opacity"
               >
-                <h3 className="text-lg md:text-xl font-playfair font-semibold text-black">Item Customization</h3>
+                <h3 className="text-xs font-semibold text-black">Item Customization</h3>
                 {collapsedSections.customization ? (
                   <ChevronDown className="h-5 w-5 text-gray-600" />
                 ) : (
@@ -572,22 +520,38 @@ const AdminDashboard: React.FC = () => {
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                      <label className="block text-sm font-medium text-black mb-2">Item Name (Game Name) *</label>
-                <input
-                  type="text"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-                        placeholder="Enter game name (e.g., Wild Rift, Mobile Legends)"
-                />
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-xs font-medium text-black mb-2">Item Name (Game Name) *</label>
+                          <input
+                            type="text"
+                            value={formData.name || ''}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs"
+                            placeholder="Enter game name (e.g., Wild Rift, Mobile Legends)"
+                          />
+                        </div>
+                        <div className="w-24 sm:w-32 flex-shrink-0">
+                          <label className="block text-xs font-medium text-black mb-2">Sort</label>
+                          <input
+                            type="number"
+                            value={formData.sort_order !== undefined ? formData.sort_order : ''}
+                            onChange={(e) => setFormData({ ...formData, sort_order: e.target.value === '' ? undefined : parseInt(e.target.value) || 0 })}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="Sort"
+                            min="0"
+                            step="1"
+                          />
+                        </div>
+                      </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-black mb-2">Category *</label>
+                <label className="block text-xs font-medium text-black mb-2">Category *</label>
                 <select
                   value={formData.category || ''}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs"
                 >
                   {categories.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -603,7 +567,7 @@ const AdminDashboard: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, popular: e.target.checked })}
                     className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                   />
-                  <span className="text-sm font-medium text-black">Mark as Popular</span>
+                  <span className="text-xs font-medium text-black">Mark as Popular</span>
                 </label>
               </div>
 
@@ -615,18 +579,18 @@ const AdminDashboard: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, available: e.target.checked })}
                     className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                   />
-                  <span className="text-sm font-medium text-black">Available for Order</span>
+                  <span className="text-xs font-medium text-black">Available for Order</span>
                 </label>
               </div>
             </div>
 
                   {/* Description Field */}
                   <div>
-                    <label className="block text-sm font-medium text-black mb-2">Description</label>
+                    <label className="block text-xs font-medium text-black mb-2">Description</label>
                     <textarea
                       value={formData.description || ''}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent resize-none"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent resize-none text-xs"
                       placeholder="Enter game description (this will be displayed below the game title in the modal)"
                       rows={4}
                     />
@@ -635,12 +599,12 @@ const AdminDashboard: React.FC = () => {
 
                   {/* Custom Subtitle Field */}
                   <div>
-                    <label className="block text-sm font-medium text-black mb-2">Custom Text Below Title</label>
+                    <label className="block text-xs font-medium text-black mb-2">Custom Text Below Title</label>
                     <input
                       type="text"
                       value={formData.subtitle || ''}
                       onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs"
                       placeholder="Enter custom text to display below the game title (optional)"
                     />
                     <p className="text-xs text-gray-500 mt-1">This text will appear below the game title on the customer side. Leave empty to show no text.</p>
@@ -648,61 +612,75 @@ const AdminDashboard: React.FC = () => {
 
             {/* Discount Pricing Section */}
                   <div>
-                    <h4 className="text-base md:text-lg font-playfair font-medium text-black mb-4">Discount (Percentage)</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h4 className="text-xs font-playfair font-medium text-black mb-4">Discount</h4>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                        <label className="block text-sm font-medium text-black mb-2">Discount Percentage (%)</label>
+                        <label className="block text-xs font-medium text-black mb-2">Price Discount</label>
                   <input
                     type="number"
                           min="0"
-                          max="100"
+                          max="1"
                           step="0.01"
-                          value={formData.discountPercentage || ''}
-                          onChange={(e) => setFormData({ ...formData, discountPercentage: Number(e.target.value) || undefined })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-                          placeholder="Enter discount percentage (e.g., 10 for 10%)"
+                          value={priceDiscount !== undefined ? priceDiscount : ''}
+                          onChange={(e) => {
+                            const discount = e.target.value !== '' ? Number(e.target.value) : undefined;
+                            setPriceDiscount(discount);
+                            // Apply discount to all price fields
+                            if (discount !== undefined && formData.variations) {
+                              const updatedVariations = formData.variations.map(v => {
+                                // Get original price (if price was already discounted, we need to reverse it first)
+                                // For simplicity, we'll apply discount to current price
+                                const originalPrice = v.price || 0;
+                                return {
+                                  ...v,
+                                  price: originalPrice * (1 - discount)
+                                };
+                              });
+                              setFormData({ ...formData, variations: updatedVariations });
+                            }
+                          }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          placeholder="0.10"
                   />
                         <p className="text-xs text-gray-500 mt-1">
-                          This percentage will be applied to all currency packages for this item.
+                          Applies discount to all Price fields
                         </p>
                 </div>
 
-                <div className="flex items-center">
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.discountActive || false}
-                      onChange={(e) => setFormData({ ...formData, discountActive: e.target.checked })}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                    />
-                    <span className="text-sm font-medium text-black">Enable Discount</span>
-                  </label>
-                </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-black mb-2">Discount Start Date</label>
+                        <label className="block text-xs font-medium text-black mb-2">Reseller Discount</label>
                   <input
-                    type="datetime-local"
-                    value={formData.discountStartDate || ''}
-                    onChange={(e) => setFormData({ ...formData, discountStartDate: e.target.value || undefined })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                    type="number"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={resellerDiscount !== undefined ? resellerDiscount : ''}
+                          onChange={(e) => {
+                            const discount = e.target.value !== '' ? Number(e.target.value) : undefined;
+                            setResellerDiscount(discount);
+                            // Calculate and apply discounted reseller price to all reseller fields
+                            // Use the current price value (original price) to calculate reseller price
+                            if (discount !== undefined && formData.variations) {
+                              const updatedVariations = formData.variations.map(v => {
+                                // Use the current price as the base for reseller discount calculation
+                                const basePrice = v.price || 0;
+                                return {
+                                  ...v,
+                                  reseller_price: basePrice * (1 - discount)
+                                };
+                              });
+                              setFormData({ ...formData, variations: updatedVariations });
+                            }
+                          }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          placeholder="0.10"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">Discount End Date</label>
-                  <input
-                    type="datetime-local"
-                    value={formData.discountEndDate || ''}
-                    onChange={(e) => setFormData({ ...formData, discountEndDate: e.target.value || undefined })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-                  />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Calculates discounted reseller price from original price
+                        </p>
                 </div>
               </div>
-              <p className="text-sm text-gray-500 mt-2">
-                      Leave dates empty for indefinite discount period. Discount will only be active if "Enable Discount" is checked and current time is within the date range. The percentage discount will be applied to all currency package prices.
-              </p>
-            </div>
+                  </div>
 
                   {/* Image Upload */}
                   <div>
@@ -723,8 +701,8 @@ const AdminDashboard: React.FC = () => {
                   className="flex-1 flex items-center justify-between text-left hover:opacity-80 transition-opacity"
                 >
                   <div className="flex-1">
-                    <h3 className="text-lg md:text-xl font-playfair font-semibold text-black">In-Game Currency Packages</h3>
-                    <p className="text-sm text-gray-500 mt-1">Add currency packages that will be shown when customers click on this item</p>
+                    <h3 className="text-xs font-semibold text-black">Packages</h3>
+                    <p className="text-xs text-gray-500 mt-1">Add currency packages that will be shown when customers click on this item</p>
                   </div>
                   {collapsedSections.packages ? (
                     <ChevronDown className="h-5 w-5 text-gray-600 ml-4 flex-shrink-0" />
@@ -740,7 +718,7 @@ const AdminDashboard: React.FC = () => {
                     {formData.variations && formData.variations.length > 1 && (
                       <button
                         onClick={sortVariationsByPrice}
-                        className="flex items-center justify-center space-x-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200 text-sm sm:text-base"
+                        className="flex items-center justify-center space-x-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200 text-xs"
                         title="Sort packages by price (lowest to highest)"
                       >
                         <ArrowUpDown className="h-4 w-4" />
@@ -768,7 +746,7 @@ const AdminDashboard: React.FC = () => {
                         const newVariation: Variation = {
                           id: `var-${Date.now()}-${Math.random()}`,
                           name: '',
-                          price: 0,
+                          price: undefined,
                           description: '',
                           sort_order: 0,
                           category: categoryName,
@@ -781,7 +759,7 @@ const AdminDashboard: React.FC = () => {
                         // Expand the new category
                         setCollapsedCategories(prev => ({ ...prev, [categoryName]: false }));
                       }}
-                      className="flex items-center justify-center space-x-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors duration-200 text-sm sm:text-base"
+                      className="flex items-center justify-center space-x-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors duration-200 text-xs"
                 >
                   <Plus className="h-4 w-4" />
                       <span className="whitespace-nowrap">Add Category</span>
@@ -890,46 +868,71 @@ const AdminDashboard: React.FC = () => {
                                     )}
                                   </button>
                                   <div className="flex-1 min-w-0">
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Category Name</label>
                                     <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                                        value={displayCategoryName}
-                                        onChange={(e) => {
-                                          // Allow editing all categories including "Unnamed Category"
-                                          if (isReadOnly) {
-                                            return;
-                                          }
-                                          
-                                          const newCategoryName = e.target.value;
-                                          // Find all variations in this category using the original category key
-                                          // We need to match variations that belong to this category group
-                                          const categoryVariationIds = new Set(categoryVariations.map(v => v.id));
-                                          
-                                          const updatedVariations = formData.variations!.map(v => {
-                                            // Check if this variation belongs to this category group
-                                            if (categoryVariationIds.has(v.id)) {
-                                              // If empty (after trimming), use a unique identifier based on first variation ID to keep this group separate
-                                              // Otherwise, set to the new name (preserve all spaces including leading/trailing)
-                                              if (newCategoryName.trim() === '') {
-                                                // Use the first variation ID as a temporary category identifier
-                                                // This ensures the category doesn't vanish - it will be grouped by this temp ID
-                                                const tempCategoryId = `__temp_empty_${categoryVariations[0]?.id || 'default'}__`;
-                                                return { ...v, category: tempCategoryId };
-                                              } else {
-                                                // If user types a name, preserve all spaces (including leading/trailing)
-                                                // Only trim when checking if empty, but preserve the actual value
-                                                return { ...v, category: newCategoryName };
-                                              }
+                                      <div className="flex-1 min-w-0">
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Category Name</label>
+                                        <input
+                                          type="text"
+                                          value={displayCategoryName}
+                                          onChange={(e) => {
+                                            // Allow editing all categories including "Unnamed Category"
+                                            if (isReadOnly) {
+                                              return;
                                             }
-                                            return v;
-                                          });
-                                          setFormData({ ...formData, variations: updatedVariations });
-                                        }}
-                                        disabled={isReadOnly}
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm font-semibold disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        placeholder="Category name (e.g., Category 1)"
-                                      />
+                                            
+                                            const newCategoryName = e.target.value;
+                                            // Find all variations in this category using the original category key
+                                            // We need to match variations that belong to this category group
+                                            const categoryVariationIds = new Set(categoryVariations.map(v => v.id));
+                                            
+                                            const updatedVariations = formData.variations!.map(v => {
+                                              // Check if this variation belongs to this category group
+                                              if (categoryVariationIds.has(v.id)) {
+                                                // If empty (after trimming), use a unique identifier based on first variation ID to keep this group separate
+                                                // Otherwise, set to the new name (preserve all spaces including leading/trailing)
+                                                if (newCategoryName.trim() === '') {
+                                                  // Use the first variation ID as a temporary category identifier
+                                                  // This ensures the category doesn't vanish - it will be grouped by this temp ID
+                                                  const tempCategoryId = `__temp_empty_${categoryVariations[0]?.id || 'default'}__`;
+                                                  return { ...v, category: tempCategoryId };
+                                                } else {
+                                                  // If user types a name, preserve all spaces (including leading/trailing)
+                                                  // Only trim when checking if empty, but preserve the actual value
+                                                  return { ...v, category: newCategoryName };
+                                                }
+                                              }
+                                              return v;
+                                            });
+                                            setFormData({ ...formData, variations: updatedVariations });
+                                          }}
+                                          disabled={isReadOnly}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs font-semibold disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                          placeholder="Category name (e.g., Category 1)"
+                                        />
+                                      </div>
+                                      <div className="w-24 sm:w-32 flex-shrink-0">
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Category Sort</label>
+                                        <input
+                                          type="number"
+                                          value={categorySort !== 999 ? categorySort : ''}
+                                          onChange={(e) => {
+                                            const value = e.target.value === '' ? 999 : parseInt(e.target.value) || 999;
+                                            // Update sort for all variations in this category using variation IDs
+                                            const categoryVariationIds = new Set(categoryVariations.map(v => v.id));
+                                            const updatedVariations = formData.variations!.map(v => {
+                                              if (categoryVariationIds.has(v.id)) {
+                                                return { ...v, sort: value !== 999 ? value : null };
+                                              }
+                                              return v;
+                                            });
+                                            setFormData({ ...formData, variations: updatedVariations });
+                                          }}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          placeholder="Sort"
+                                          min="0"
+                                          step="1"
+                                        />
+                                      </div>
                                       {!isReadOnly && (
                                         <button
                                           onClick={(e) => {
@@ -938,7 +941,7 @@ const AdminDashboard: React.FC = () => {
                                             console.log('Delete category clicked:', category);
                                             setCategoryToDelete(category);
                                           }}
-                                          className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200 flex-shrink-0"
+                                          className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200 flex-shrink-0 self-end mb-1"
                                           aria-label="Delete category"
                                           title="Delete category"
                                           type="button"
@@ -947,29 +950,6 @@ const AdminDashboard: React.FC = () => {
                                         </button>
                                       )}
                                     </div>
-                                  </div>
-                                  <div className="w-full sm:w-32 flex-shrink-0">
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Category Sort</label>
-                                    <input
-                                      type="number"
-                                      value={categorySort !== 999 ? categorySort : ''}
-                                      onChange={(e) => {
-                                        const value = e.target.value === '' ? 999 : parseInt(e.target.value) || 999;
-                                        // Update sort for all variations in this category using variation IDs
-                                        const categoryVariationIds = new Set(categoryVariations.map(v => v.id));
-                                        const updatedVariations = formData.variations!.map(v => {
-                                          if (categoryVariationIds.has(v.id)) {
-                                            return { ...v, sort: value !== 999 ? value : null };
-                                          }
-                                          return v;
-                                        });
-                                        setFormData({ ...formData, variations: updatedVariations });
-                                      }}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                                      placeholder="Sort"
-                                      min="0"
-                                      step="1"
-                                    />
                                   </div>
                                 </div>
 
@@ -980,62 +960,67 @@ const AdminDashboard: React.FC = () => {
                                     const index = formData.variations!.findIndex(v => v.id === variation.id);
                                     return (
                                       <div key={variation.id} className="p-3 bg-gray-50 rounded-lg space-y-3 border border-gray-200">
-                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                        {/* Product Name Row */}
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-xs font-medium text-gray-700 whitespace-nowrap flex-shrink-0">Product Name</label>
                                           <input
                                             type="text"
                                             value={variation.name || ''}
-                    onChange={(e) => updateVariation(index, 'name', e.target.value)}
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                                            placeholder="Package name (e.g., 5 Diamonds)"
-                  />
-                                          <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                                              value={variation.price !== undefined && variation.price !== null && variation.price !== 0 ? variation.price : (variation.price === '' ? '' : '')}
+                                            onChange={(e) => updateVariation(index, 'name', e.target.value)}
+                                            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs"
+                                            placeholder="e.g., Weekly Diamond Pass"
+                                          />
+                                          <button
+                                            onClick={() => removeVariation(index)}
+                                            className="p-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors duration-200 flex-shrink-0"
+                                            aria-label="Remove package"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </button>
+                                        </div>
+
+                                        {/* Pricing Row - All in one row on mobile */}
+                                        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                                          {/* Price (default price for customers) */}
+                                          <div>
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">Price</label>
+                                            <input
+                                              type="number"
+                                              value={variation.price !== undefined && variation.price !== null && variation.price !== 0 ? variation.price : ''}
                                               onChange={(e) => {
-                                                const value = e.target.value;
-                                                // Allow empty string while typing to enable deletion of zeros
-                                                if (value === '') {
-                                                  // Store as empty string temporarily to allow deletion
-                                                  updateVariation(index, 'price', '');
-                                                } else {
-                                                  // Remove leading zeros except for decimal numbers (0.5 is valid)
-                                                  let cleanedValue = value;
-                                                  // Only remove leading zeros if it's not a decimal
-                                                  if (cleanedValue.length > 1 && cleanedValue.startsWith('0') && cleanedValue[1] !== '.' && cleanedValue[1] !== ',') {
-                                                    cleanedValue = cleanedValue.replace(/^0+/, '') || '0';
-                                                  }
-                                                  const numValue = parseFloat(cleanedValue);
-                                                  if (!isNaN(numValue)) {
-                                                    updateVariation(index, 'price', numValue);
-                                                  }
-                                                }
+                                                const value = e.target.value === '' ? undefined : Number(e.target.value);
+                                                updateVariation(index, 'price', value);
                                               }}
-                                              onBlur={(e) => {
-                                                // When user leaves the field, convert empty to 0 for validation
-                                                const currentPrice = variation.price;
-                                                if (currentPrice === '' || currentPrice === null || currentPrice === undefined) {
-                                                  updateVariation(index, 'price', 0);
-                                                }
-                                              }}
-                                              className="flex-1 sm:w-32 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                                              placeholder="Price (₱)"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                              placeholder="0"
                                               min="0"
                                               step="0.01"
-                  />
-                  <button
-                    onClick={() => removeVariation(index)}
-                                              className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors duration-200 flex-shrink-0"
-                                              aria-label="Remove package"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-            </div>
+                                            />
+                                          </div>
+
+                                          {/* Reseller Price */}
+                                          <div>
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">Reseller</label>
+                                            <input
+                                              type="number"
+                                              value={variation.reseller_price !== undefined && variation.reseller_price !== null ? variation.reseller_price : ''}
+                                              onChange={(e) => {
+                                                const value = e.target.value === '' ? undefined : Number(e.target.value);
+                                                updateVariation(index, 'reseller_price', value);
+                                              }}
+                                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                              placeholder="0"
+                                              min="0"
+                                              step="0.01"
+                                            />
+                                          </div>
+                                        </div>
+
+                                        {/* Description (optional) */}
                                         <textarea
                                           value={variation.description || ''}
                                           onChange={(e) => updateVariation(index, 'description', e.target.value)}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm resize-y"
+                                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs resize-y"
                                           placeholder="Package description (optional)"
                                           rows={2}
                                         />
@@ -1060,7 +1045,10 @@ const AdminDashboard: React.FC = () => {
                                       const newVariation: Variation = {
                                         id: `var-${Date.now()}-${Math.random()}`,
                                         name: '',
-                                        price: 0,
+                                        price: undefined,
+                                        member_price: undefined,
+                                        reseller_price: undefined,
+                                        credits_amount: undefined,
                                         description: '',
                                         sort_order: categoryVariations.length,
                                         category: categoryValue
@@ -1070,7 +1058,7 @@ const AdminDashboard: React.FC = () => {
                                         variations: [...(formData.variations || []), newVariation]
                                       });
                                     }}
-                                    className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-sm border-2 border-dashed border-gray-300"
+                                    className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-xs border-2 border-dashed border-gray-300"
                                   >
                                     <Plus className="h-4 w-4" />
                                     <span>Add Package to {displayCategoryName || 'Category'}</span>
@@ -1086,7 +1074,7 @@ const AdminDashboard: React.FC = () => {
                   ) : (
                     <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                       <p className="text-gray-500">No currency packages added yet</p>
-                      <p className="text-sm text-gray-400 mt-1">Click "Add Category" to create a category and add packages</p>
+                      <p className="text-xs text-gray-400 mt-1">Click "Add Category" to create a category and add packages</p>
                     </div>
                   )}
                 </div>
@@ -1101,8 +1089,8 @@ const AdminDashboard: React.FC = () => {
                   className="flex-1 flex items-center justify-between text-left hover:opacity-80 transition-opacity"
                 >
                   <div className="flex-1">
-                    <h3 className="text-lg md:text-xl font-playfair font-semibold text-black">Customer Information Fields</h3>
-                    <p className="text-sm text-gray-500 mt-1">Define custom fields that will appear in the customer information section during checkout for this game</p>
+                    <h3 className="text-xs font-semibold text-black">Customer Information Fields</h3>
+                    <p className="text-xs text-gray-500 mt-1">Define custom fields that will appear in the customer information section during checkout for this game</p>
                   </div>
                   {collapsedSections.customFields ? (
                     <ChevronDown className="h-5 w-5 text-gray-600 ml-4 flex-shrink-0" />
@@ -1128,22 +1116,22 @@ const AdminDashboard: React.FC = () => {
                     formData.customFields.map((customField, index) => (
                       <div key={index} className="mb-3 p-4 bg-gray-50 rounded-lg space-y-3">
                         <div>
-                          <label className="block text-sm font-medium text-black mb-1">Field Label *</label>
+                          <label className="block text-xs font-medium text-black mb-1">Field Label *</label>
                   <input
                     type="text"
                             value={customField.label || ''}
                             onChange={(e) => updateCustomField(index, 'label', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs"
                             placeholder="e.g., ID with tag, UID, Server"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-black mb-1">Placeholder Text</label>
+                          <label className="block text-xs font-medium text-black mb-1">Placeholder Text</label>
                   <input
                             type="text"
                             value={customField.placeholder || ''}
                             onChange={(e) => updateCustomField(index, 'placeholder', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs"
                             placeholder="e.g., ID with tag (If Riot ID)"
                           />
                         </div>
@@ -1155,7 +1143,7 @@ const AdminDashboard: React.FC = () => {
                               onChange={(e) => updateCustomField(index, 'required', e.target.checked)}
                               className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                             />
-                            <span className="text-sm font-medium text-black">Required Field</span>
+                            <span className="text-xs font-medium text-black">Required Field</span>
                           </label>
                   <button
                             onClick={() => removeCustomField(index)}
@@ -1169,7 +1157,7 @@ const AdminDashboard: React.FC = () => {
                   ) : (
                     <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                       <p className="text-gray-500">No custom fields added yet</p>
-                      <p className="text-sm text-gray-400 mt-1">Click "Add Field" to create custom customer information fields</p>
+                      <p className="text-xs text-gray-400 mt-1">Click "Add Field" to create custom customer information fields</p>
           </div>
                   )}
         </div>
@@ -1191,14 +1179,14 @@ const AdminDashboard: React.FC = () => {
             className="bg-white rounded-lg p-4 md:p-6 max-w-md w-full mx-4 shadow-xl" 
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">Delete Category</h3>
-            <p className="text-sm text-gray-600 mb-6">
+            <h3 className="text-xs font-semibold text-gray-900 mb-2">Delete Category</h3>
+            <p className="text-xs text-gray-600 mb-6">
               Are you sure you want to delete this category? All packages in this category will be moved to "Unnamed Category".
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setCategoryToDelete(null)}
-                className="px-3 py-1.5 md:px-4 md:py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors duration-200"
+                className="px-3 py-1.5 md:px-4 md:py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors duration-200"
               >
                 Cancel
               </button>
@@ -1232,7 +1220,7 @@ const AdminDashboard: React.FC = () => {
                     setCategoryToDelete(null);
                   }
                 }}
-                className="px-3 py-1.5 md:px-4 md:py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded transition-colors duration-200"
+                className="px-3 py-1.5 md:px-4 md:py-2 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded transition-colors duration-200"
               >
                 Delete Category
               </button>
@@ -1248,28 +1236,28 @@ const AdminDashboard: React.FC = () => {
   if (currentView === 'items') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
+        <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setCurrentView('dashboard')}
-                  className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+                  className="text-gray-600 hover:text-black transition-colors duration-200"
+                  aria-label="Back to dashboard"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Dashboard</span>
                 </button>
-                <h1 className="text-lg md:text-2xl font-playfair font-semibold text-black">Manage Game Items</h1>
+                <h1 className="text-black">Manage Game Items</h1>
               </div>
               <div className="flex items-center space-x-2 md:space-x-3">
                 {showBulkActions && (
                   <div className="hidden md:flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-xs text-gray-600">
                       {selectedItems.length} item(s) selected
                     </span>
                     <button
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm md:text-base"
+                      className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-xs"
                     >
                       <span>Bulk Actions</span>
                     </button>
@@ -1277,7 +1265,7 @@ const AdminDashboard: React.FC = () => {
                 )}
                 <button
                   onClick={handleAddItem}
-                  className="flex items-center space-x-1 md:space-x-2 bg-green-600 text-white px-2 py-1.5 md:px-3 md:py-1.5 lg:px-4 lg:py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-xs md:text-sm lg:text-base"
+                  className="flex items-center space-x-1 md:space-x-2 bg-green-600 text-white px-2 py-1.5 md:px-3 md:py-1.5 lg:px-4 lg:py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 text-xs lg:text-xs"
                 >
                   <Plus className="h-3 w-3 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">Add New Item</span>
@@ -1295,8 +1283,8 @@ const AdminDashboard: React.FC = () => {
               <div className="flex flex-col gap-3 md:gap-4">
                 <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-sm md:text-base lg:text-lg font-medium text-black">Bulk Actions</h3>
-                    <p className="text-xs md:text-sm text-gray-600">{selectedItems.length} item(s) selected</p>
+                    <h3 className="text-xs lg:text-xs font-medium text-black">Bulk Actions</h3>
+                    <p className="text-xs text-gray-600">{selectedItems.length} item(s) selected</p>
                   </div>
                   <button
                     onClick={() => setShowBulkActions(false)}
@@ -1309,7 +1297,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="flex flex-col gap-2 md:gap-3">
                   {/* Change Category */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <label className="text-xs md:text-sm font-medium text-gray-700 whitespace-nowrap">Change Category:</label>
+                    <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Change Category:</label>
                     <select
                       onChange={(e) => {
                         if (e.target.value) {
@@ -1317,7 +1305,7 @@ const AdminDashboard: React.FC = () => {
                           e.target.value = ''; // Reset selection
                         }
                       }}
-                      className="flex-1 px-2 py-1.5 md:px-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs md:text-sm"
+                      className="flex-1 px-2 py-1.5 md:px-3 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       disabled={isProcessing}
                     >
                       <option value="">Select Category</option>
@@ -1332,7 +1320,7 @@ const AdminDashboard: React.FC = () => {
                   <button
                     onClick={handleBulkRemove}
                     disabled={isProcessing}
-                      className="flex-1 flex items-center justify-center space-x-2 bg-red-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm"
+                      className="flex-1 flex items-center justify-center space-x-2 bg-red-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-red-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
                   >
                       <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
                     <span>{isProcessing ? 'Removing...' : 'Remove Selected'}</span>
@@ -1344,7 +1332,7 @@ const AdminDashboard: React.FC = () => {
                       setSelectedItems([]);
                       setShowBulkActions(false);
                     }}
-                      className="flex-1 flex items-center justify-center space-x-2 bg-gray-500 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-gray-600 transition-colors duration-200 text-xs md:text-sm"
+                      className="flex-1 flex items-center justify-center space-x-2 bg-gray-500 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg hover:bg-gray-600 transition-colors duration-200 text-xs"
                   >
                       <X className="h-3 w-3 md:h-4 md:w-4" />
                     <span>Clear Selection</span>
@@ -1368,14 +1356,14 @@ const AdminDashboard: React.FC = () => {
                         onChange={handleSelectAll}
                         className="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 md:w-5 md:h-5"
                       />
-                      <span className="text-xs md:text-sm font-medium text-gray-700">
+                      <span className="text-xs font-medium text-gray-700">
                         Select All ({menuItems.length} items)
                       </span>
                     </label>
                   </div>
                   {selectedItems.length > 0 && (
                     <div className="flex items-center justify-between sm:justify-end space-x-3">
-                      <span className="text-xs md:text-sm text-gray-600">
+                      <span className="text-xs text-gray-600">
                         {selectedItems.length} item(s) selected
                       </span>
                       <button
@@ -1393,7 +1381,7 @@ const AdminDashboard: React.FC = () => {
                       </button>
                       <button
                         onClick={() => setSelectedItems([])}
-                        className="hidden md:block text-xs md:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                        className="hidden md:block text-xs text-gray-500 hover:text-gray-700 transition-colors duration-200"
                       >
                         Clear Selection
                       </button>
@@ -1436,7 +1424,7 @@ const AdminDashboard: React.FC = () => {
                           className="bg-gray-100 px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors"
                           onClick={() => setCollapsedCategories(prev => ({ ...prev, [category.id]: !prev[category.id] }))}
                         >
-                          <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
+                          <h3 className="text-xs font-semibold text-gray-900">{category.name}</h3>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1455,13 +1443,12 @@ const AdminDashboard: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Select</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Sort</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Name</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Price</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Currency Packages</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Status</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Actions</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Select</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Sort</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Name</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Packages</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Status</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1484,25 +1471,13 @@ const AdminDashboard: React.FC = () => {
                                       const newSortOrder = parseInt(e.target.value) || 0;
                                       await updateMenuItem(item.id, { ...item, sort_order: newSortOrder });
                                     }}
-                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
                                   />
                                 </td>
                                 <td className="px-6 py-4">
                           <div className="font-medium text-gray-900">{item.name}</div>
                                 </td>
-                                <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                                  <div className="flex flex-col">
-                                    {item.isOnDiscount && item.discountPrice ? (
-                                      <>
-                                        <span className="text-red-600 font-semibold">₱{item.discountPrice}</span>
-                                        <span className="text-gray-500 line-through text-xs">₱{item.basePrice}</span>
-                                      </>
-                                    ) : (
-                                      <span>₱{item.basePrice}</span>
-                                    )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-xs text-gray-500">
                                   {item.variations?.length || 0} package{item.variations?.length !== 1 ? 's' : ''}
                                 </td>
                                 <td className="px-6 py-4">
@@ -1557,7 +1532,7 @@ const AdminDashboard: React.FC = () => {
                           className="bg-gray-100 px-6 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors"
                           onClick={() => setCollapsedCategories(prev => ({ ...prev, '__uncategorized__': !prev['__uncategorized__'] }))}
                         >
-                          <h3 className="text-lg font-semibold text-gray-900">Uncategorized</h3>
+                          <h3 className="text-xs font-semibold text-gray-900">Uncategorized</h3>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1576,13 +1551,12 @@ const AdminDashboard: React.FC = () => {
                         <table className="w-full">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Select</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Sort</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Name</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Price</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Currency Packages</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Status</th>
-                              <th className="px-6 py-3 text-left text-sm font-medium text-gray-900">Actions</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Select</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Sort</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Name</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Packages</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Status</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-900">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -1605,25 +1579,13 @@ const AdminDashboard: React.FC = () => {
                                       const newSortOrder = parseInt(e.target.value) || 0;
                                       await updateMenuItem(item.id, { ...item, sort_order: newSortOrder });
                                     }}
-                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
                                   />
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="font-medium text-gray-900">{item.name}</div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        <div className="flex flex-col">
-                          {item.isOnDiscount && item.discountPrice ? (
-                            <>
-                              <span className="text-red-600 font-semibold">₱{item.discountPrice}</span>
-                              <span className="text-gray-500 line-through text-xs">₱{item.basePrice}</span>
-                            </>
-                          ) : (
-                            <span>₱{item.basePrice}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-xs text-gray-500">
                                   {item.variations?.length || 0} package{item.variations?.length !== 1 ? 's' : ''}
                       </td>
                       <td className="px-6 py-4">
@@ -1706,7 +1668,7 @@ const AdminDashboard: React.FC = () => {
                           className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors"
                           onClick={() => setCollapsedCategories(prev => ({ ...prev, [category.id]: !prev[category.id] }))}
                         >
-                          <h3 className="text-base font-semibold text-gray-900">{category.name}</h3>
+                          <h3 className="text-xs font-semibold text-gray-900">{category.name}</h3>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1731,7 +1693,7 @@ const AdminDashboard: React.FC = () => {
                         onChange={() => handleSelectItem(item.id)}
                         className="rounded border-gray-300 text-green-600 focus:ring-green-500 w-4 h-4 md:w-5 md:h-5"
                       />
-                      <span className="text-xs md:text-sm text-gray-600">Select</span>
+                      <span className="text-xs text-gray-600">Select</span>
                     </label>
                     <div className="flex items-center space-x-2">
                       <button
@@ -1750,51 +1712,36 @@ const AdminDashboard: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <label className="text-xs md:text-sm text-gray-600">Sort:</label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={item.sort_order || 0}
-                                onChange={async (e) => {
-                                  const newSortOrder = parseInt(e.target.value) || 0;
-                                  await updateMenuItem(item.id, { ...item, sort_order: newSortOrder });
-                                }}
-                                className="w-16 md:w-20 px-2 py-1 border border-gray-300 rounded text-xs md:text-sm"
-                              />
-                  </div>
-                  
                   <div className="flex items-start justify-between mb-2 md:mb-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm md:text-base font-medium text-gray-900 truncate">{item.name}</h3>
+                      <h3 className="text-xs font-medium text-gray-900 truncate">{item.name}</h3>
+                      <div className="mt-1 text-xs space-y-1">
+                        <div>
+                          <span className="text-gray-500">Category:</span>
+                          <span className="ml-1 text-gray-900">
+                            {categories.find(cat => cat.id === item.category)?.name}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Packages:</span>
+                          <span className="ml-1 text-gray-900">{item.variations?.length || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                      <label className="text-xs text-gray-600">Sort:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.sort_order || 0}
+                        onChange={async (e) => {
+                          const newSortOrder = parseInt(e.target.value) || 0;
+                          await updateMenuItem(item.id, { ...item, sort_order: newSortOrder });
+                        }}
+                        className="w-16 md:w-20 px-2 py-1 border border-gray-300 rounded text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 md:gap-4 text-xs md:text-sm">
-                    <div>
-                      <span className="text-gray-500">Category:</span>
-                      <span className="ml-1 text-gray-900">
-                        {categories.find(cat => cat.id === item.category)?.name}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Price:</span>
-                      <span className="ml-1 font-medium text-gray-900">
-                        {item.isOnDiscount && item.discountPrice ? (
-                          <span className="text-red-600">₱{item.discountPrice}</span>
-                        ) : (
-                          `₱${item.basePrice}`
-                        )}
-                        {item.isOnDiscount && item.discountPrice && (
-                          <span className="text-gray-500 line-through text-xs ml-1">₱{item.basePrice}</span>
-                        )}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Currency Packages:</span>
-                      <span className="ml-1 text-gray-900">{item.variations?.length || 0}</span>
-                    </div>
-                    </div>
                   
                   <div className="flex items-center justify-between mt-3">
                     <div className="flex items-center space-x-2">
@@ -1827,7 +1774,7 @@ const AdminDashboard: React.FC = () => {
                           className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors"
                           onClick={() => setCollapsedCategories(prev => ({ ...prev, '__uncategorized__': !prev['__uncategorized__'] }))}
                         >
-                          <h3 className="text-base font-semibold text-gray-900">Uncategorized</h3>
+                          <h3 className="text-xs font-semibold text-gray-900">Uncategorized</h3>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1852,7 +1799,7 @@ const AdminDashboard: React.FC = () => {
                                   onChange={() => handleSelectItem(item.id)}
                                   className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                                 />
-                                <span className="text-sm text-gray-600">Select</span>
+                                <span className="text-xs text-gray-600">Select</span>
                               </label>
                               <div className="flex items-center space-x-2">
                                 <button
@@ -1871,41 +1818,34 @@ const AdminDashboard: React.FC = () => {
                                 </button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <label className="text-sm text-gray-600">Sort:</label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={item.sort_order || 0}
-                                onChange={async (e) => {
-                                  const newSortOrder = parseInt(e.target.value) || 0;
-                                  await updateMenuItem(item.id, { ...item, sort_order: newSortOrder });
-                                }}
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                              />
-                            </div>
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1 min-w-0">
                                 <h3 className="font-medium text-gray-900 truncate">{item.name}</h3>
+                                <div className="mt-1 text-xs space-y-1">
+                                  <div>
+                                    <span className="text-gray-500">Category:</span>
+                                    <span className="ml-1 text-gray-900">
+                                      {categories.find(cat => cat.id === item.category)?.name}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Packages:</span>
+                                    <span className="ml-1 text-gray-900">{item.variations?.length || 0}</span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-500">Price:</span>
-                                <span className="ml-1 font-medium text-gray-900">
-                                  {item.isOnDiscount && item.discountPrice ? (
-                                    <>
-                                      <span className="text-red-600">₱{item.discountPrice}</span>
-                                      <span className="text-gray-500 line-through text-xs ml-1">₱{item.basePrice}</span>
-                                    </>
-                                  ) : (
-                                    `₱${item.basePrice}`
-                                  )}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Currency Packages:</span>
-                                <span className="ml-1 text-gray-900">{item.variations?.length || 0}</span>
+                              <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                <label className="text-xs text-gray-600">Sort:</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={item.sort_order || 0}
+                                  onChange={async (e) => {
+                                    const newSortOrder = parseInt(e.target.value) || 0;
+                                    await updateMenuItem(item.id, { ...item, sort_order: newSortOrder });
+                                  }}
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
                               </div>
                             </div>
                   <div className="flex items-center justify-between mt-3">
@@ -1944,6 +1884,11 @@ const AdminDashboard: React.FC = () => {
     return <CategoryManager onBack={() => setCurrentView('dashboard')} />;
   }
 
+  // Members View
+  if (currentView === 'members') {
+    return <MemberManager onBack={() => setCurrentView('dashboard')} />;
+  }
+
   // Payment Methods View
   if (currentView === 'payments') {
     return <PaymentMethodManager onBack={() => setCurrentView('dashboard')} />;
@@ -1953,18 +1898,18 @@ const AdminDashboard: React.FC = () => {
   if (currentView === 'settings') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
+        <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setCurrentView('dashboard')}
-                  className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+                  className="text-gray-600 hover:text-black transition-colors duration-200"
+                  aria-label="Back to dashboard"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Dashboard</span>
                 </button>
-                <h1 className="text-lg md:text-2xl font-playfair font-semibold text-black">Site Settings</h1>
+                <h1 className="text-black">Site Settings</h1>
               </div>
             </div>
           </div>
@@ -1981,18 +1926,18 @@ const AdminDashboard: React.FC = () => {
   if (currentView === 'orders') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b">
+        <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setCurrentView('dashboard')}
-                  className="flex items-center space-x-2 text-gray-600 hover:text-black transition-colors duration-200"
+                  className="text-gray-600 hover:text-black transition-colors duration-200"
+                  aria-label="Back to dashboard"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Dashboard</span>
                 </button>
-                <h1 className="text-lg md:text-2xl font-playfair font-semibold text-black">Orders</h1>
+                <h1 className="text-black">Orders</h1>
               </div>
             </div>
           </div>
@@ -2009,11 +1954,11 @@ const AdminDashboard: React.FC = () => {
   // Dashboard View
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
+      <div className="sticky top-0 z-40 bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <h1 className="text-lg md:text-2xl font-noto font-semibold text-black">Admin</h1>
+              <h1 className="text-black">Admin</h1>
             </div>
             <div className="flex items-center space-x-4">
               <a
@@ -2039,17 +1984,11 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-center">
               <div className="mb-2 md:mb-0">
-                {adminSection === 'members' ? (
-                  <Users className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
-                ) : (
-                  <ShoppingBag className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
-                )}
+                <Gamepad2 className="h-6 w-6 md:h-8 md:w-8 text-blue-600" />
               </div>
               <div className="md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">
-                  {adminSection === 'members' ? 'Total Members' : 'Total Items'}
-                </p>
-                <p className="text-xl md:text-2xl font-semibold text-gray-900">{totalItems}</p>
+                <p className="text-xs font-medium text-gray-600">Total Games</p>
+                <p className="text-xs font-semibold text-gray-900">{totalItems}</p>
               </div>
             </div>
           </div>
@@ -2057,17 +1996,11 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-center">
               <div className="mb-2 md:mb-0">
-                {adminSection === 'members' ? (
-                  <Trophy className="h-6 w-6 md:h-8 md:w-8 text-amber-500" />
-                ) : (
-                  <Clock className="h-6 w-6 md:h-8 md:w-8 text-emerald-600" />
-                )}
+                <Clock className="h-6 w-6 md:h-8 md:w-8 text-emerald-600" />
               </div>
               <div className="md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">
-                  {adminSection === 'members' ? 'Top Member' : 'Pending Orders'}
-                </p>
-                <p className="text-xl md:text-2xl font-semibold text-gray-900">{availableItems}</p>
+                <p className="text-xs font-medium text-gray-600">Pending Orders</p>
+                <p className="text-xs font-semibold text-gray-900">{availableItems}</p>
               </div>
             </div>
           </div>
@@ -2075,17 +2008,11 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-center">
               <div className="mb-2 md:mb-0">
-                {adminSection === 'members' ? (
-                  <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-emerald-600" />
-                ) : (
-                  <Star className="h-6 w-6 md:h-8 md:w-8 text-amber-500" />
-                )}
+                <Star className="h-6 w-6 md:h-8 md:w-8 text-amber-500" />
               </div>
               <div className="md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">
-                  {adminSection === 'members' ? 'Done Orders' : 'Popular Items'}
-                </p>
-                <p className="text-xl md:text-2xl font-semibold text-gray-900">{adminSection === 'members' ? doneOrders : popularItems}</p>
+                <p className="text-xs font-medium text-gray-600">Popular Items</p>
+                <p className="text-xs font-semibold text-gray-900">{popularItems}</p>
               </div>
             </div>
           </div>
@@ -2093,57 +2020,17 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:items-center">
               <div className="mb-2 md:mb-0">
-                {adminSection === 'members' ? (
-                  <DollarSign className="h-6 w-6 md:h-8 md:w-8 text-indigo-600" />
-                ) : (
-                  <Activity className="h-6 w-6 md:h-8 md:w-8 text-indigo-600" />
-                )}
+                <Activity className="h-6 w-6 md:h-8 md:w-8 text-indigo-600" />
               </div>
               <div className="md:ml-4">
-                <p className="text-xs md:text-sm font-medium text-gray-600">
-                  {adminSection === 'members' ? 'Total Sales' : 'Active'}
-                </p>
-                <p className="text-xl md:text-2xl font-semibold text-gray-900">{adminSection === 'members' ? `₱${totalSales.toFixed(2)}` : 'Online'}</p>
+                <p className="text-xs font-medium text-gray-600">Active</p>
+                <p className="text-xs font-semibold text-gray-900">Online</p>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Section Selector */}
-        <div className="mb-6 flex space-x-4">
-          <button
-            onClick={() => setAdminSection('customers')}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-              adminSection === 'customers'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Customers
-          </button>
-          <button
-            onClick={() => {
-              setAdminSection('members');
-            }}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-              adminSection === 'members'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Members
-          </button>
-        </div>
-
-        {/* Members Section */}
-        {adminSection === 'members' && (
-          <div className="max-w-7xl mx-auto px-4 py-8">
-            <MemberDashboard />
-          </div>
-        )}
 
         {/* Quick Actions */}
-        {adminSection === 'customers' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
             <div className="space-y-3">
@@ -2152,61 +2039,67 @@ const AdminDashboard: React.FC = () => {
                 className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
               >
                 <FilePlus className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                <span className="text-sm md:text-base font-medium text-gray-900">Add New Game Item</span>
+                <span className="text-xs font-medium text-gray-900">Add New Game Item</span>
               </button>
               <button
                 onClick={() => setCurrentView('items')}
                 className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
               >
                 <List className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                <span className="text-sm md:text-base font-medium text-gray-900">Manage Game Items</span>
+                <span className="text-xs font-medium text-gray-900">Manage Game Items</span>
               </button>
               <button
                 onClick={() => setCurrentView('categories')}
                 className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
               >
                 <FolderTree className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                <span className="text-sm md:text-base font-medium text-gray-900">Manage Categories</span>
+                <span className="text-xs font-medium text-gray-900">Manage Categories</span>
+              </button>
+              <button
+                onClick={() => setCurrentView('members')}
+                className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
+              >
+                <Users className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
+                <span className="text-xs font-medium text-gray-900">Manage Members</span>
               </button>
               <button
                 onClick={() => setCurrentView('payments')}
                 className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
               >
                 <Wallet className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                <span className="text-sm md:text-base font-medium text-gray-900">Payment Methods</span>
+                <span className="text-xs font-medium text-gray-900">Payment Methods</span>
               </button>
               <button
                 onClick={() => setCurrentView('orders')}
                 className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
               >
                 <ShoppingBag className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                <span className="text-sm md:text-base font-medium text-gray-900">Orders</span>
+                <span className="text-xs font-medium text-gray-900">Orders</span>
               </button>
               <button
                 onClick={() => setCurrentView('settings')}
                 className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
               >
                 <Cog className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                <span className="text-sm md:text-base font-medium text-gray-900">Site Settings</span>
+                <span className="text-xs font-medium text-gray-900">Site Settings</span>
               </button>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
-            <h3 className="text-base md:text-lg font-playfair font-medium text-black mb-4">Categories Overview</h3>
+            <h3 className="text-xs font-playfair font-medium text-black mb-4">Categories Overview</h3>
             <div className="space-y-3">
               {categoryCounts.map((category) => (
                 <div key={category.id} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="font-medium text-gray-900">{category.name}</span>
                   </div>
-                  <span className="text-sm text-gray-500">{category.count} items</span>
+                  <span className="text-xs text-gray-500">{category.count} items</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
-        )}
       </div>
     </div>
   );

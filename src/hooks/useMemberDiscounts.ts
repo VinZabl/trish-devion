@@ -81,8 +81,12 @@ export const useMemberDiscounts = () => {
           onConflict: 'member_id,menu_item_id,variation_id'
         });
 
-      if (error) throw error;
-      await fetchDiscountsByMember(memberId);
+      if (error) {
+        console.error('Error upserting discount:', error);
+        throw error;
+      }
+      // Don't fetch all discounts for this member on every save (too expensive)
+      // The caller will refresh what's needed
       return true;
     } catch (err) {
       console.error('Error setting discount:', err);

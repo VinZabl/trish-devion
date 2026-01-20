@@ -58,24 +58,44 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     
     // Otherwise, use regular discount logic
     if (item.isOnDiscount && item.discountPercentage !== undefined) {
-      const discountAmount = (basePrice * item.discountPercentage) / 100;
+      const discountAmount = basePrice * item.discountPercentage;
       return basePrice - discountAmount;
     }
     return basePrice;
   };
 
+  // Get the variation object by ID
+  const getVariationById = (variationId?: string): Variation | undefined => {
+    if (!variationId || !item.variations) return undefined;
+    return item.variations.find(v => v.id === variationId);
+  };
+
   // Synchronous version for immediate display (uses cached discounts)
   const getDiscountedPriceSync = (basePrice: number, variationId?: string): number => {
-    // If user is reseller and has member discount for this variation, use it
+    const variation = getVariationById(variationId);
+    
+    // Priority 1: If user is reseller and variation has reseller_price, use it
+    if (isReseller() && currentMember && variation?.reseller_price !== undefined) {
+      return variation.reseller_price;
+    }
+    
+    // Priority 2: If user is a member (end_user, not reseller) and variation has member_price, use it
+    if (currentMember && !isReseller() && currentMember.user_type === 'end_user' && variation?.member_price !== undefined) {
+      return variation.member_price;
+    }
+    
+    // Priority 3: If user is reseller and has member discount for this variation, use it
     if (isReseller() && currentMember && variationId && memberDiscounts[variationId]) {
       return memberDiscounts[variationId];
     }
     
-    // Otherwise, use regular discount logic
+    // Priority 4: Otherwise, use regular discount logic
     if (item.isOnDiscount && item.discountPercentage !== undefined) {
-      const discountAmount = (basePrice * item.discountPercentage) / 100;
+      const discountAmount = basePrice * item.discountPercentage;
       return basePrice - discountAmount;
     }
+    
+    // Priority 5: Default to base price
     return basePrice;
   };
 
@@ -362,7 +382,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                                               </div>
                                             ) : (
                                               <div className="text-xs text-gray-900 font-semibold">
-                                                -{item.discountPercentage}%
+                                                -{(item.discountPercentage * 100).toFixed(0)}%
                                               </div>
                                             )}
                                           </div>

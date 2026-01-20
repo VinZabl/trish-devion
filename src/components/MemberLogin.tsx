@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowLeft, User, Mail, Phone, Lock, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useMemberAuth } from '../hooks/useMemberAuth';
 
 interface MemberLoginProps {
   onBack: () => void;
-  onLoginSuccess: () => void;
+  onLoginSuccess: (memberId: string) => void;
 }
 
 const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => {
@@ -13,13 +13,12 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    mobile_no: '',
     password: '',
     confirmPassword: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, register } = useMemberAuth();
+  const { login, register, currentMember } = useMemberAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +32,9 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
           password: formData.password
         });
 
-        if (result.success) {
-          onLoginSuccess();
+        if (result.success && result.member) {
+          // State is updated synchronously, so we can call this immediately
+          onLoginSuccess(result.member.id);
         } else {
           setError(result.error || 'Login failed');
         }
@@ -55,12 +55,12 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
         const result = await register({
           username: formData.username,
           email: formData.email,
-          mobile_no: formData.mobile_no,
           password: formData.password
         });
 
-        if (result.success) {
-          onLoginSuccess();
+        if (result.success && result.member) {
+          // State is updated synchronously, so we can call this immediately
+          onLoginSuccess(result.member.id);
         } else {
           setError(result.error || 'Registration failed');
         }
@@ -88,21 +88,21 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
           Back
         </button>
 
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 md:p-8 shadow-xl">
+        <div className="glass-card rounded-xl p-6">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-cafe-primary to-cafe-secondary rounded-full mb-4">
               <User className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-cafe-text mb-2">
+            <h2 className="text-2xl font-semibold text-cafe-text mb-2">
               {isLogin ? 'Member Login' : 'Member Registration'}
             </h2>
-            <p className="text-cafe-text/70">
+            <p className="text-cafe-textMuted">
               {isLogin ? 'Welcome back!' : 'Create your account'}
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
+            <div className="mb-4 p-3 glass-strong border border-red-500/30 rounded-lg text-red-200 text-sm">
               {error}
             </div>
           )}
@@ -119,7 +119,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
                     type="text"
                     value={formData.username}
                     onChange={(e) => handleInputChange('username', e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-cafe-text placeholder-cafe-text/50 focus:outline-none focus:ring-2 focus:ring-cafe-primary"
+                    className="w-full pl-10 pr-4 py-3 glass border border-cafe-primary/30 rounded-lg text-cafe-text placeholder-cafe-textMuted focus:outline-none focus:ring-2 focus:ring-cafe-primary focus:border-cafe-primary"
                     placeholder="Enter username"
                     required
                   />
@@ -133,35 +133,17 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-cafe-text/50" />
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-cafe-text placeholder-cafe-text/50 focus:outline-none focus:ring-2 focus:ring-cafe-primary"
-                  placeholder="Enter email"
-                  required
-                />
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 glass border border-cafe-primary/30 rounded-lg text-cafe-text placeholder-cafe-textMuted focus:outline-none focus:ring-2 focus:ring-cafe-primary focus:border-cafe-primary"
+                    placeholder="Enter email"
+                    required
+                  />
               </div>
             </div>
 
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-medium text-cafe-text mb-2">
-                  Mobile Number
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-cafe-text/50" />
-                  <input
-                    type="tel"
-                    value={formData.mobile_no}
-                    onChange={(e) => handleInputChange('mobile_no', e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-cafe-text placeholder-cafe-text/50 focus:outline-none focus:ring-2 focus:ring-cafe-primary"
-                    placeholder="Enter mobile number"
-                    required
-                  />
-                </div>
-              </div>
-            )}
 
             <div>
               <label className="block text-sm font-medium text-cafe-text mb-2">
@@ -169,14 +151,14 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-cafe-text/50" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 bg-white/10 border border-white/20 rounded-lg text-cafe-text placeholder-cafe-text/50 focus:outline-none focus:ring-2 focus:ring-cafe-primary"
-                  placeholder="Enter password"
-                  required
-                />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    className="w-full pl-10 pr-12 py-3 glass border border-cafe-primary/30 rounded-lg text-cafe-text placeholder-cafe-textMuted focus:outline-none focus:ring-2 focus:ring-cafe-primary focus:border-cafe-primary"
+                    placeholder="Enter password"
+                    required
+                  />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -198,7 +180,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
                     type={showPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-cafe-text placeholder-cafe-text/50 focus:outline-none focus:ring-2 focus:ring-cafe-primary"
+                    className="w-full pl-10 pr-4 py-3 glass border border-cafe-primary/30 rounded-lg text-cafe-text placeholder-cafe-textMuted focus:outline-none focus:ring-2 focus:ring-cafe-primary focus:border-cafe-primary"
                     placeholder="Confirm password"
                     required
                   />
@@ -223,7 +205,6 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ onBack, onLoginSuccess }) => 
                 setFormData({
                   username: '',
                   email: '',
-                  mobile_no: '',
                   password: '',
                   confirmPassword: ''
                 });

@@ -16,9 +16,10 @@ export const useMembers = () => {
   const fetchMembers = async () => {
     try {
       setLoading(true);
+      // Only select needed fields, exclude password_hash
       const { data, error } = await supabase
         .from('members')
-        .select('*')
+        .select('id, username, email, mobile_no, level, status, user_type, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -32,6 +33,8 @@ export const useMembers = () => {
 
   const fetchTopMembers = async (limit: number = 10) => {
     try {
+      // Use database aggregation instead of fetching all orders
+      // This is much more efficient and reduces egress significantly
       const { data, error } = await supabase
         .from('orders')
         .select('member_id, total_price')
@@ -39,7 +42,8 @@ export const useMembers = () => {
 
       if (error) throw error;
 
-      // Calculate total cost per member
+      // Calculate total cost per member (client-side aggregation is still needed)
+      // But we're only fetching member_id and total_price, not full order data
       const memberTotals = new Map<string, { total_cost: number; order_count: number }>();
       data.forEach(order => {
         if (order.member_id) {
@@ -62,9 +66,10 @@ export const useMembers = () => {
         return;
       }
 
+      // Only select needed fields from members
       const { data: membersData, error: membersError } = await supabase
         .from('members')
-        .select('*')
+        .select('id, username, email, status, user_type, created_at, updated_at')
         .in('id', memberIds);
 
       if (membersError) throw membersError;

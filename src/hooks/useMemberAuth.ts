@@ -38,6 +38,7 @@ export const useMemberAuth = () => {
           if (!error && data) {
             setCurrentMember(data as Member);
           } else {
+            // Only remove if there's an actual error or member is inactive
             localStorage.removeItem('member_id');
             setCurrentMember(null);
           }
@@ -46,14 +47,32 @@ export const useMemberAuth = () => {
           localStorage.removeItem('member_id');
           setCurrentMember(null);
         }
+      } else {
+        // No member_id in localStorage, ensure currentMember is null
+        setCurrentMember(null);
       }
       setLoading(false);
     };
 
     checkAuth();
+
+    // Listen for storage events (when localStorage is updated from another tab/component)
+    const handleStorageChange = () => {
+      checkAuth();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom event to trigger re-check from same window
+    window.addEventListener('memberAuthUpdate', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('memberAuthUpdate', handleStorageChange);
+    };
   }, []);
 
-  const register = async (data: CreateMemberData): Promise<{ success: boolean; error?: string }> => {
+  const register = async (data: CreateMemberData): Promise<{ success: boolean; error?: string; member?: Member }> => {
     try {
       // Check if email or username already exists
       const { data: existingEmail } = await supabase
@@ -85,7 +104,7 @@ export const useMemberAuth = () => {
         .insert({
           username: data.username,
           email: data.email,
-          mobile_no: data.mobile_no,
+          mobile_no: data.mobile_no || null,
           password_hash: passwordHash,
           level: 1,
           status: 'active',
@@ -101,7 +120,9 @@ export const useMemberAuth = () => {
       if (newMember) {
         localStorage.setItem('member_id', newMember.id);
         setCurrentMember(newMember as Member);
-        return { success: true };
+        // Dispatch custom event to notify other instances
+        window.dispatchEvent(new CustomEvent('memberAuthUpdate'));
+        return { success: true, member: newMember as Member };
       }
 
       return { success: false, error: 'Registration failed' };
@@ -138,6 +159,8 @@ export const useMemberAuth = () => {
       // Set member in localStorage and state
       localStorage.setItem('member_id', member.id);
       setCurrentMember(member as Member);
+      // Dispatch custom event to notify other instances
+      window.dispatchEvent(new CustomEvent('memberAuthUpdate'));
       return { success: true, member: member as Member };
     } catch (err) {
       console.error('Login error:', err);

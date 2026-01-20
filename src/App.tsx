@@ -18,7 +18,7 @@ import Footer from './components/Footer';
 function MainApp() {
   const cart = useCart();
   const { menuItems } = useMenu();
-  const { currentMember, logout } = useMemberAuth();
+  const { currentMember, logout, loading: authLoading } = useMemberAuth();
   const [currentView, setCurrentView] = React.useState<'menu' | 'cart' | 'checkout' | 'member-login'>('menu');
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
   const [searchQuery, setSearchQuery] = React.useState<string>('');
@@ -72,11 +72,13 @@ function MainApp() {
 
   // Redirect from login view if member is already logged in
   React.useEffect(() => {
-    if (currentMember && currentView === 'member-login') {
+    // Wait for auth to finish loading before checking
+    if (!authLoading && currentMember && currentView === 'member-login') {
       setCurrentView('menu');
       setJustLoggedIn(true);
     }
-  }, [currentMember, currentView]);
+  }, [currentMember, currentView, authLoading]);
+
 
   const handleMemberClick = () => {
     if (currentMember) {

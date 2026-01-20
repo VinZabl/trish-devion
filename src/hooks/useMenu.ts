@@ -26,16 +26,10 @@ export const useMenu = () => {
       if (itemsError) throw itemsError;
 
       const formattedItems: MenuItem[] = items?.map(item => {
-        // Calculate if discount is currently active
-        const now = new Date();
-        const discountStart = item.discount_start_date ? new Date(item.discount_start_date) : null;
-        const discountEnd = item.discount_end_date ? new Date(item.discount_end_date) : null;
+        // Calculate if discount is currently active (no date range check)
+        const isDiscountActive = item.discount_active || false;
         
-        const isDiscountActive = item.discount_active && 
-          (!discountStart || now >= discountStart) && 
-          (!discountEnd || now <= discountEnd);
-        
-        // discount_price now stores percentage (0-100)
+        // discount_price now stores decimal (0-1, e.g., 0.10 for 10%)
         const discountPercentage = item.discount_price !== null ? item.discount_price : undefined;
 
         return {
@@ -49,8 +43,6 @@ export const useMenu = () => {
           image: item.image_url || undefined,
           sort_order: item.sort_order || 0,
           discountPercentage,
-          discountStartDate: item.discount_start_date || undefined,
-          discountEndDate: item.discount_end_date || undefined,
           discountActive: item.discount_active || false,
           // Legacy field for backward compatibility
           discountPrice: item.discount_price || undefined,
@@ -60,6 +52,9 @@ export const useMenu = () => {
             id: v.id,
             name: v.name,
             price: v.price,
+            member_price: v.member_price !== null && v.member_price !== undefined ? v.member_price : undefined,
+            reseller_price: v.reseller_price !== null && v.reseller_price !== undefined ? v.reseller_price : undefined,
+            credits_amount: v.credits_amount !== null && v.credits_amount !== undefined ? v.credits_amount : undefined,
             description: v.description || undefined,
             sort_order: v.sort_order || 0,
             category: v.category || undefined,
@@ -94,10 +89,8 @@ export const useMenu = () => {
           available: item.available ?? true,
           image_url: item.image || null,
           sort_order: item.sort_order !== undefined ? item.sort_order : 0,
-          // Store discountPercentage in discount_price column (repurposed)
+          // Store discountPercentage (as decimal 0-1) in discount_price column
           discount_price: item.discountPercentage !== undefined ? item.discountPercentage : null,
-          discount_start_date: item.discountStartDate || null,
-          discount_end_date: item.discountEndDate || null,
           discount_active: item.discountActive || false,
           custom_fields: item.customFields || [],
           subtitle: item.subtitle || null
@@ -116,6 +109,9 @@ export const useMenu = () => {
               menu_item_id: menuItem.id,
               name: v.name,
               price: v.price,
+              member_price: v.member_price !== undefined ? v.member_price : null,
+              reseller_price: v.reseller_price !== undefined ? v.reseller_price : null,
+              credits_amount: v.credits_amount !== undefined ? v.credits_amount : null,
               description: v.description || null,
               sort_order: v.sort_order !== undefined ? v.sort_order : index,
               category: v.category || null,
@@ -149,10 +145,10 @@ export const useMenu = () => {
           available: updates.available,
           image_url: updates.image || null,
           sort_order: updates.sort_order !== undefined ? updates.sort_order : undefined,
-          // Store discountPercentage in discount_price column (repurposed)
+          // Store discountPercentage (as decimal 0-1) in discount_price column
           discount_price: updates.discountPercentage !== undefined ? updates.discountPercentage : null,
-          discount_start_date: updates.discountStartDate || null,
-          discount_end_date: updates.discountEndDate || null,
+          discount_start_date: null,
+          discount_end_date: null,
           discount_active: updates.discountActive,
           custom_fields: updates.customFields !== undefined ? updates.customFields : undefined,
           subtitle: updates.subtitle !== undefined ? (updates.subtitle || null) : undefined
@@ -173,6 +169,9 @@ export const useMenu = () => {
               menu_item_id: id,
               name: v.name,
               price: v.price,
+              member_price: v.member_price !== undefined ? v.member_price : null,
+              reseller_price: v.reseller_price !== undefined ? v.reseller_price : null,
+              credits_amount: v.credits_amount !== undefined ? v.credits_amount : null,
               description: v.description || null,
               sort_order: v.sort_order !== undefined ? v.sort_order : index,
               category: v.category || null,

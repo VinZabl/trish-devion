@@ -5,7 +5,7 @@ import { useOrders } from '../hooks/useOrders';
 import { supabase } from '../lib/supabase';
 
 const OrderManager: React.FC = () => {
-  const { orders, loading, fetchOrders, updateOrderStatus } = useOrders();
+  const { orders, loading, fetchOrders, updateOrderStatus, fetchOrderById } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [timeKey, setTimeKey] = useState(0); // Force re-render for time updates
@@ -14,7 +14,7 @@ const OrderManager: React.FC = () => {
   const [memberMap, setMemberMap] = useState<Record<string, Member>>({});
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(100); // Limit to 100 most recent orders
   }, []);
 
   // Fetch member information for orders
@@ -55,9 +55,17 @@ const OrderManager: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleViewOrder = (order: Order) => {
-    setSelectedOrder(order);
-    setIsModalOpen(true);
+  const handleViewOrder = async (order: Order) => {
+    // Fetch full order details only when viewing
+    const fullOrder = await fetchOrderById(order.id);
+    if (fullOrder) {
+      setSelectedOrder(fullOrder);
+      setIsModalOpen(true);
+    } else {
+      // Fallback to basic order if fetch fails
+      setSelectedOrder(order);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCopyField = async (key: string, value: string) => {
@@ -167,7 +175,7 @@ const OrderManager: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setOrderFilter('place_order')}
-            className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-colors duration-200 text-xs md:text-sm font-medium ${
+            className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-colors duration-200 text-xs font-medium ${
               orderFilter === 'place_order'
                 ? 'bg-blue-500 text-white border border-blue-600'
                 : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -177,7 +185,7 @@ const OrderManager: React.FC = () => {
           </button>
           <button
             onClick={() => setOrderFilter('order_via_messenger')}
-            className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-colors duration-200 text-xs md:text-sm font-medium ${
+            className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition-colors duration-200 text-xs font-medium ${
               orderFilter === 'order_via_messenger'
                 ? 'bg-blue-500 text-white border border-blue-600'
                 : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -190,7 +198,7 @@ const OrderManager: React.FC = () => {
         {/* Refresh Button */}
         <button
           onClick={fetchOrders}
-          className="px-3 py-1.5 md:px-4 md:py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 shadow-sm text-xs md:text-sm"
+          className="px-3 py-1.5 md:px-4 md:py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 shadow-sm text-xs"
         >
           <Loader2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
           Refresh
@@ -218,7 +226,7 @@ const OrderManager: React.FC = () => {
                    }`}>
                      {getTimeAgo(order.created_at)}
                    </span>
-                   <h3 className="text-sm font-semibold text-gray-900">
+                   <h3 className="text-xs font-semibold text-gray-900">
                      Order #{order.id.slice(0, 8)}
                    </h3>
                  </div>
@@ -237,7 +245,7 @@ const OrderManager: React.FC = () => {
               {/* Member Information */}
               {order.member_id && memberMap[order.member_id] && (
                 <div className="mb-3 pb-3 border-b border-gray-200">
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2 text-xs">
                     <User className="h-4 w-4 text-gray-500" />
                     <span className="text-gray-600">Member:</span>
                     <span className="font-semibold text-gray-900">{memberMap[order.member_id].username}</span>
@@ -250,22 +258,22 @@ const OrderManager: React.FC = () => {
               <div className="grid grid-cols-3 gap-4 mb-4 pb-4 border-b border-gray-200">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Total Price</p>
-                  <p className="text-base font-semibold text-gray-900">₱{order.total_price}</p>
+                  <p className="text-xs font-semibold text-gray-900">₱{order.total_price}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Items</p>
-                  <p className="text-sm font-semibold text-gray-900">{order.order_items.length} item(s)</p>
+                  <p className="text-xs font-semibold text-gray-900">{order.order_items.length} item(s)</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">MOP</p>
-                  <p className="text-sm font-semibold text-gray-900 capitalize">{order.payment_method_id}</p>
+                  <p className="text-xs font-semibold text-gray-900 capitalize">{order.payment_method_id}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                 <button
                   onClick={() => handleViewOrder(order)}
-                  className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                  className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                 >
                   <Eye className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">View Details</span>
@@ -275,14 +283,14 @@ const OrderManager: React.FC = () => {
                    <>
                      <button
                        onClick={() => handleApprove(order.id)}
-                       className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                       className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                      >
                        <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                        Approve
                      </button>
                      <button
                        onClick={() => handleReject(order.id)}
-                       className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                       className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                      >
                        <XCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                        Reject
@@ -293,14 +301,14 @@ const OrderManager: React.FC = () => {
                    <>
                      <button
                        onClick={() => handleApprove(order.id)}
-                       className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                       className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                      >
                        <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                        Approve
                      </button>
                      <button
                        onClick={() => handleReject(order.id)}
-                       className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                       className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                      >
                        <XCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                        Reject
@@ -318,7 +326,7 @@ const OrderManager: React.FC = () => {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 md:p-4">
           <div className="bg-white rounded-lg shadow-xl p-3 md:p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4 md:mb-6 pb-3 md:pb-4 border-b border-gray-200">
-              <h2 className="text-lg md:text-2xl font-semibold text-gray-900">
+              <h2 className="text-xs font-semibold text-gray-900">
                 Order #{selectedOrder.id.slice(0, 8)}
               </h2>
               <button
@@ -335,29 +343,29 @@ const OrderManager: React.FC = () => {
             <div className="space-y-4 md:space-y-6">
               {/* Order Status */}
               <div className="flex items-center gap-2 md:gap-3">
-                <span className="text-xs md:text-sm text-gray-600">Status:</span>
+                <span className="text-xs text-gray-600">Status:</span>
                 {getStatusBadge(selectedOrder)}
               </div>
 
               {/* Member Information */}
               {selectedOrder.member_id && memberMap[selectedOrder.member_id] && (
                 <div className="bg-blue-50 rounded-lg p-3 md:p-4 border border-blue-200">
-                  <h3 className="text-sm md:text-base font-medium text-gray-900 mb-2 md:mb-3 flex items-center gap-2">
+                  <h3 className="text-xs font-medium text-gray-900 mb-2 md:mb-3 flex items-center gap-2">
                     <User className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
                     Registered Member
                   </h3>
                   <div className="space-y-1.5 md:space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs md:text-sm text-gray-600">Username:</span>
-                      <span className="text-xs md:text-sm font-semibold text-gray-900">{memberMap[selectedOrder.member_id].username}</span>
+                      <span className="text-xs text-gray-600">Username:</span>
+                      <span className="text-xs font-semibold text-gray-900">{memberMap[selectedOrder.member_id].username}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs md:text-sm text-gray-600">Email:</span>
-                      <span className="text-xs md:text-sm text-gray-900">{memberMap[selectedOrder.member_id].email}</span>
+                      <span className="text-xs text-gray-600">Email:</span>
+                      <span className="text-xs text-gray-900">{memberMap[selectedOrder.member_id].email}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs md:text-sm text-gray-600">Mobile:</span>
-                      <span className="text-xs md:text-sm text-gray-900">{memberMap[selectedOrder.member_id].mobile_no}</span>
+                      <span className="text-xs text-gray-600">Mobile:</span>
+                      <span className="text-xs text-gray-900">{memberMap[selectedOrder.member_id].mobile_no}</span>
                     </div>
                   </div>
                 </div>
@@ -365,7 +373,7 @@ const OrderManager: React.FC = () => {
 
               {/* Order Items */}
               <div className="bg-gray-50 rounded-lg p-3 md:p-4 border border-gray-200">
-                <h3 className="text-sm md:text-base font-medium text-gray-900 mb-3 md:mb-4">Order Items</h3>
+                <h3 className="text-xs font-medium text-gray-900 mb-3 md:mb-4">Order Items</h3>
                 <div className="space-y-2 md:space-y-3">
                   {selectedOrder.order_items.map((item, index) => (
                     <div key={index} className="flex items-start gap-2 md:gap-4 py-2 md:py-3 border-b border-gray-200 last:border-b-0">
@@ -378,17 +386,17 @@ const OrderManager: React.FC = () => {
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <div className="text-xl opacity-40 text-gray-400">🎮</div>
+                            <div className="text-xs opacity-40 text-gray-400">🎮</div>
                           </div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm md:text-base font-medium text-gray-900">{item.name}</h4>
+                        <h4 className="text-xs font-medium text-gray-900">{item.name}</h4>
                         {item.selectedVariation && (
-                          <p className="text-xs md:text-sm text-gray-600">Package: {item.selectedVariation.name}</p>
+                          <p className="text-xs text-gray-600">Package: {item.selectedVariation.name}</p>
                         )}
                         {item.selectedAddOns && item.selectedAddOns.length > 0 && (
-                          <p className="text-xs md:text-sm text-gray-600">
+                          <p className="text-xs text-gray-600">
                             Add-ons: {item.selectedAddOns.map(addOn => 
                               addOn.quantity && addOn.quantity > 1 
                                 ? `${addOn.name} x${addOn.quantity}`
@@ -396,16 +404,16 @@ const OrderManager: React.FC = () => {
                             ).join(', ')}
                           </p>
                         )}
-                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">₱{item.totalPrice} × {item.quantity}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 md:mt-1">₱{item.totalPrice} × {item.quantity}</p>
                       </div>
                       <div className="flex-shrink-0">
-                        <span className="text-sm md:text-base font-semibold text-gray-900">₱{item.totalPrice * item.quantity}</span>
+                        <span className="text-xs font-semibold text-gray-900">₱{item.totalPrice * item.quantity}</span>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between text-base md:text-xl font-semibold text-gray-900">
+                  <div className="flex items-center justify-between text-xs font-semibold text-gray-900">
                     <span>Total:</span>
                     <span className="text-gray-900">₱{selectedOrder.total_price}</span>
                   </div>
@@ -414,13 +422,13 @@ const OrderManager: React.FC = () => {
 
               {/* Customer Information */}
               <div className="bg-gray-50 rounded-lg p-3 md:p-4 border border-gray-200">
-                <h3 className="text-sm md:text-base font-medium text-gray-900 mb-3 md:mb-4">Customer Information</h3>
+                <h3 className="text-xs font-medium text-gray-900 mb-3 md:mb-4">Customer Information</h3>
                 <div className="space-y-1.5 md:space-y-2">
                   {Object.entries(selectedOrder.customer_info)
                     .filter(([key]) => key !== 'Payment Method')
                     .map(([key, value]) => (
                       <div key={key} className="flex items-center justify-between gap-2">
-                        <p className="text-xs md:text-sm text-gray-600 flex-1 min-w-0">
+                        <p className="text-xs text-gray-600 flex-1 min-w-0">
                           <span className="font-medium text-gray-700">{key}:</span> <span className="break-words">{value}</span>
                         </p>
                         <button
@@ -441,7 +449,7 @@ const OrderManager: React.FC = () => {
 
               {/* Receipt */}
               <div className="bg-gray-50 rounded-lg p-3 md:p-4 border border-gray-200">
-                <h3 className="text-sm md:text-base font-medium text-gray-900 mb-3 md:mb-4">Payment Receipt</h3>
+                <h3 className="text-xs font-medium text-gray-900 mb-3 md:mb-4">Payment Receipt</h3>
                 <div className="flex flex-col items-center gap-3 md:gap-4">
                   <a
                     href={selectedOrder.receipt_url}
@@ -463,7 +471,7 @@ const OrderManager: React.FC = () => {
                       href={selectedOrder.receipt_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-50 border border-blue-300 rounded-lg hover:bg-blue-100 transition-colors duration-200 text-blue-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                      className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-50 border border-blue-300 rounded-lg hover:bg-blue-100 transition-colors duration-200 text-blue-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                     >
                       <Eye className="h-3.5 w-3.5 md:h-4 md:w-4" />
                       View Receipt
@@ -473,7 +481,7 @@ const OrderManager: React.FC = () => {
                       target="_blank"
                       rel="noopener noreferrer"
                       download
-                      className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                      className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                     >
                       <Download className="h-3.5 w-3.5 md:h-4 md:w-4" />
                       Download Receipt
@@ -489,14 +497,14 @@ const OrderManager: React.FC = () => {
                     <>
                       <button
                         onClick={() => handleApprove(selectedOrder.id)}
-                        className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                        className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                       >
                         <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                         Approve
                       </button>
                       <button
                         onClick={() => handleReject(selectedOrder.id)}
-                        className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                        className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                       >
                         <XCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                         Reject
@@ -507,14 +515,14 @@ const OrderManager: React.FC = () => {
                     <>
                       <button
                         onClick={() => handleApprove(selectedOrder.id)}
-                        className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                        className="px-3 py-1.5 md:px-4 md:py-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors duration-200 text-green-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                       >
                         <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                         Approve
                       </button>
                       <button
                         onClick={() => handleReject(selectedOrder.id)}
-                        className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-medium"
+                        className="px-3 py-1.5 md:px-4 md:py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors duration-200 text-red-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
                       >
                         <XCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                         Reject
