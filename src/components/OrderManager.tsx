@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, XCircle, Loader2, Eye, Download, X, Copy, User } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Eye, X, Copy, User } from 'lucide-react';
 import { Order, OrderStatus, Member } from '../types';
 import { useOrders } from '../hooks/useOrders';
 import { useSiteSettings } from '../hooks/useSiteSettings';
@@ -554,16 +554,6 @@ const OrderManager: React.FC = () => {
                     >
                       <Eye className="h-3.5 w-3.5 md:h-4 md:w-4" />
                       View Receipt
-                    </a>
-                    <a
-                      href={selectedOrder.receipt_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download
-                      className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors duration-200 text-gray-700 flex items-center gap-1.5 md:gap-2 text-xs font-medium"
-                    >
-                      <Download className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                      Download Receipt
                     </a>
                   </div>
                 </div>

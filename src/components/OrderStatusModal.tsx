@@ -42,32 +42,15 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
     
     if (orderData) {
       // Only update if status or updated_at changed (indicating a real update)
+      // Do not auto-close on approve/reject; user closes via X to dismiss the banner
       setOrder(prevOrder => {
         if (!prevOrder || isInitial) {
-          // On initial load, check if order is already completed
-          if (onSucceededClose && 
-              (orderData.status === 'approved' || orderData.status === 'rejected')) {
-            // Order is already completed, call onSucceededClose to clear localStorage
-            setTimeout(() => {
-              onSucceededClose();
-            }, 0);
-          }
           return orderData;
         }
-        // Only update if status or updated_at timestamp changed
         if (prevOrder.status !== orderData.status || prevOrder.updated_at !== orderData.updated_at) {
-          // If order status changed to approved or rejected, call onSucceededClose if provided
-          if (onSucceededClose && 
-              (prevOrder.status === 'pending' || prevOrder.status === 'processing') &&
-              (orderData.status === 'approved' || orderData.status === 'rejected')) {
-            // Use setTimeout to avoid state updates during render
-            setTimeout(() => {
-              onSucceededClose();
-            }, 0);
-          }
           return orderData;
         }
-        return prevOrder; // Keep previous order to prevent unnecessary re-renders
+        return prevOrder;
       });
     }
     
@@ -215,7 +198,7 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
         {/* Footer */}
         <div className="mt-6 pt-4 border-t border-cafe-primary/20">
           <p className="text-xs text-cafe-textMuted text-center">
-            by Diginix
+            Trish Devion
           </p>
         </div>
       </div>

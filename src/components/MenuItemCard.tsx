@@ -146,7 +146,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     <>
       <div 
         onClick={handleCardClick}
-        className={`relative flex flex-col transition-all duration-300 group rounded-xl overflow-hidden ${!item.available ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+        className={`relative flex flex-col transition-all duration-300 group rounded-lg overflow-hidden ${!item.available ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
         style={{
           border: '1px solid rgba(185, 28, 28, 0.3)',
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
@@ -166,13 +166,13 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
       >
         {/* Closed Text Overlay for unavailable items */}
         {!item.available && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl z-10">
-            <span className="text-white font-bold text-lg sm:text-xl opacity-90 font-sans">Closed</span>
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-t-lg z-10">
+            <span className="text-white font-bold text-sm sm:text-base opacity-90 font-sans">Closed</span>
           </div>
         )}
         
-        {/* Square Game Icon on Top */}
-        <div className="relative w-full aspect-square overflow-hidden rounded-t-xl bg-gradient-to-br from-cafe-darkCard to-cafe-darkBg transition-transform duration-300 group-hover:scale-105">
+        {/* Game Icon - compact aspect */}
+        <div className="relative w-full aspect-[4/3] overflow-hidden rounded-t-lg bg-gradient-to-br from-cafe-darkCard to-cafe-darkBg transition-transform duration-300 group-hover:scale-105">
           {item.image ? (
             <img
               src={item.image}
@@ -187,13 +187,13 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             />
           ) : null}
           <div className={`absolute inset-0 flex items-center justify-center ${item.image ? 'hidden' : ''}`}>
-            <div className="text-4xl opacity-20 text-gray-400">🎮</div>
+            <div className="text-2xl opacity-20 text-gray-400">🎮</div>
           </div>
-          {/* Game Title Overlay on Icon */}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-8 pb-2 px-2">
+          {/* Game Title + Subtitle Overlay on Icon */}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-5 pb-1.5 px-1.5">
             <h4 
               ref={nameRef}
-              className={`text-white font-bold text-sm sm:text-base text-center line-clamp-2 ${
+              className={`text-white font-bold text-xs sm:text-sm text-center line-clamp-2 ${
                 shouldScroll ? 'animate-scroll-text' : ''
               }`}
               style={shouldScroll ? {
@@ -210,16 +210,12 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 item.name
               )}
             </h4>
+            {item.subtitle ? (
+              <p className="text-[10px] sm:text-xs text-white/80 text-center mt-0.5 truncate px-0.5">
+                {item.subtitle}
+              </p>
+            ) : null}
           </div>
-        </div>
-        
-        {/* Dark Section Below Icon - Subtitle Only */}
-        <div className="w-full bg-[#0A0A0A] px-3 py-2 min-h-[2rem] flex items-center justify-center text-center">
-          {item.subtitle ? (
-            <p className="text-xs text-gray-400">
-              {item.subtitle}
-            </p>
-          ) : null}
         </div>
       </div>
 

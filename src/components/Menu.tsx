@@ -184,7 +184,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
             <span className="ml-4 text-sm text-gray-500">({menuItems.length} {menuItems.length === 1 ? 'game' : 'games'})</span>
           </div>
           
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
             {renderMenuItems(menuItems)}
           </div>
         </section>
@@ -228,7 +228,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
             <h3 className="text-2xl md:text-3xl font-medium text-cafe-text">Popular</h3>
           </div>
           
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
             {renderMenuItems(menuItems)}
           </div>
         </section>
@@ -282,7 +282,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
               <h3 className="text-2xl md:text-3xl font-medium text-cafe-text">Popular</h3>
             </div>
             
-            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
               {renderMenuItems(popularItems)}
             </div>
           </section>
@@ -300,7 +300,7 @@ const Menu: React.FC<MenuProps> = ({ menuItems, addToCart, cartItems, updateQuan
                 <h3 className="text-2xl md:text-3xl font-medium text-cafe-text font-sans">{category.name}</h3>
               </div>
               
-              <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-3">
                 {renderMenuItems(categoryItems)}
               </div>
             </section>
