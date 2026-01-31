@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, ArrowUpDown, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, Star, Activity, FilePlus, List, FolderTree, Wallet, Cog, Trophy, DollarSign, Clock, Gamepad2, Copy } from 'lucide-react';
 import { MenuItem, Variation, CustomField } from '../types';
 import { useMenu } from '../hooks/useMenu';
@@ -37,6 +37,7 @@ const AdminDashboard: React.FC = () => {
     }
   };
   const [pendingOrders, setPendingOrders] = useState<number>(0);
+  const notificationVolumeRef = useRef<number>(0.5);
 
   // Fetch admin password from database on mount
   useEffect(() => {
@@ -60,14 +61,48 @@ const AdminDashboard: React.FC = () => {
     fetchAdminPassword();
   }, []);
 
-  // Fetch pending orders only when order_option is 'place_order'; when order_via_messenger, don't poll
+  // Fetch notification volume for new-order sound (used when order_option is place_order)
+  useEffect(() => {
+    const fetchVolume = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('site_settings')
+          .select('value')
+          .eq('id', 'notification_volume')
+          .single();
+        if (!error && data?.value) {
+          const v = parseFloat(data.value);
+          if (!isNaN(v) && v >= 0 && v <= 1) notificationVolumeRef.current = v;
+        }
+      } catch (err) {
+        console.error('Error fetching notification volume:', err);
+      }
+    };
+    fetchVolume();
+  }, []);
+
+  // Pending orders count: initial fetch + Supabase Realtime (no polling – efficient on egress)
+  // Play notification sound when a new pending order arrives (works from any admin page)
   useEffect(() => {
     if (orderOption !== 'place_order') {
       setPendingOrders(0);
       return;
     }
 
-    const fetchPendingOrders = async () => {
+    const isPlaceOrderPending = (row: { status?: string; order_option?: string | null }) =>
+      row.status === 'pending' && (row.order_option ?? 'place_order') === 'place_order';
+
+    const playNewOrderSound = () => {
+      try {
+        const audio = new Audio('/notifSound.mp3');
+        audio.volume = notificationVolumeRef.current;
+        audio.play().catch((err) => console.error('Error playing notification sound:', err));
+      } catch (err) {
+        console.error('Error creating audio element:', err);
+      }
+    };
+
+    const fetchPendingCount = async () => {
       try {
         const { data, error } = await supabase
           .from('orders')
@@ -75,21 +110,45 @@ const AdminDashboard: React.FC = () => {
           .eq('status', 'pending');
 
         if (error) throw error;
-
-        const placeOrderPending = data?.filter(order => {
-          const oo = order.order_option || 'place_order';
-          return oo === 'place_order';
-        }).length || 0;
-
-        setPendingOrders(placeOrderPending);
+        const count = (data ?? []).filter((o) => (o.order_option ?? 'place_order') === 'place_order').length;
+        setPendingOrders(count);
       } catch (err) {
-        console.error('Error fetching pending orders:', err);
+        console.error('Error fetching pending orders count:', err);
       }
     };
 
-    fetchPendingOrders();
-    const interval = setInterval(fetchPendingOrders, 10000);
-    return () => clearInterval(interval);
+    fetchPendingCount();
+
+    const channel = supabase
+      .channel('admin-pending-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const row = payload.new as { status?: string; order_option?: string | null };
+            if (isPlaceOrderPending(row)) {
+              setPendingOrders((n) => n + 1);
+              playNewOrderSound();
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const oldRow = payload.old as { status?: string; order_option?: string | null };
+            const newRow = payload.new as { status?: string; order_option?: string | null };
+            const wasPending = isPlaceOrderPending(oldRow);
+            const isPending = isPlaceOrderPending(newRow);
+            if (wasPending && !isPending) setPendingOrders((n) => Math.max(0, n - 1));
+            else if (!wasPending && isPending) setPendingOrders((n) => n + 1);
+          } else if (payload.eventType === 'DELETE') {
+            const row = payload.old as { status?: string; order_option?: string | null };
+            if (isPlaceOrderPending(row)) setPendingOrders((n) => Math.max(0, n - 1));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [orderOption]);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -2247,10 +2306,15 @@ const AdminDashboard: React.FC = () => {
               </button>
               <button
                 onClick={() => setCurrentView('orders')}
-                className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200"
+                className="w-full flex items-center space-x-3 p-2 md:p-3 text-left hover:bg-gray-50 rounded-lg transition-colors duration-200 relative"
               >
                 <ShoppingBag className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
                 <span className="text-xs font-medium text-gray-900">Orders</span>
+                {orderOption === 'place_order' && pendingOrders > 0 && (
+                  <span className="ml-auto flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+                    {pendingOrders > 99 ? '99+' : pendingOrders}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setCurrentView('settings')}

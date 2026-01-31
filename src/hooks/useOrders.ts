@@ -144,17 +144,13 @@ export const useOrders = () => {
     }
   };
 
-  // Subscribe to order updates (real-time) only when order_option is 'place_order'
-  // When order_via_messenger, stop polling/realtime for new orders
+  // Subscribe to order changes via Supabase Realtime (no polling – efficient on egress)
+  // Only when order_option is 'place_order'; when order_via_messenger, no subscription
   useEffect(() => {
     if (orderOption !== 'place_order') return;
-    if (orders.length === 0) return;
 
-    const mostRecentOrder = orders[0];
-    const mostRecentDate = mostRecentOrder?.created_at;
-    
     const channel = supabase
-      .channel('orders-changes')
+      .channel('orders-realtime')
       .on(
         'postgres_changes',
         {
@@ -164,26 +160,18 @@ export const useOrders = () => {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            // Use the order data from the payload directly (optimized - no extra egress)
             const newOrder = payload.new as Order;
             setOrders(prev => {
-              // Check if order already exists (avoid duplicates)
-              if (prev.some(order => order.id === newOrder.id)) {
-                return prev;
-              }
-              // Add new order to the beginning, keep only the most recent 100
-              const updated = [newOrder, ...prev];
-              return updated.slice(0, 100);
+              if (prev.some(order => order.id === newOrder.id)) return prev;
+              return [newOrder, ...prev].slice(0, 100);
             });
           } else if (payload.eventType === 'UPDATE') {
-            // Update the specific order in the list using payload data (optimized - no extra egress)
             const updatedOrder = payload.new as Order;
-            setOrders(prev => prev.map(order => 
+            setOrders(prev => prev.map(order =>
               order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
             ));
           } else if (payload.eventType === 'DELETE') {
-            // Remove deleted order from list
-            setOrders(prev => prev.filter(order => order.id !== payload.old.id));
+            setOrders(prev => prev.filter(order => order.id !== (payload.old as { id: string }).id));
           }
         }
       )
@@ -192,7 +180,7 @@ export const useOrders = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orderOption, orders.length, orders[0]?.created_at]);
+  }, [orderOption]);
 
   return {
     orders,

@@ -1618,6 +1618,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, t
               2
             </div>
             <h2 className="text-sm font-medium text-cafe-text">Choose Payment Method</h2>
+            {paymentMethod && (
+              <span className="text-sm font-medium text-white ml-1">— {paymentMethod.name} Selected</span>
+            )}
           </div>
           
           <div className="grid grid-cols-6 gap-1 md:gap-2 mb-6">
@@ -1662,7 +1665,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, t
               </button>
             ))}
           </div>
-
 
           {/* Receipt Upload Section */}
           <div className="mb-6">

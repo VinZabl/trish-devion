@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Loader2, Eye, X, Copy, User } from 'lucide-react';
 import { Order, OrderStatus, Member } from '../types';
 import { useOrders } from '../hooks/useOrders';
@@ -17,7 +17,6 @@ const OrderManager: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [orderToReject, setOrderToReject] = useState<Order | null>(null);
   const [rejectMessage, setRejectMessage] = useState('');
-  const previousOrderIdsRef = useRef<Set<string>>(new Set());
 
   const REJECT_SHORTCUTS = [
     'Invalid inputs',
@@ -26,101 +25,15 @@ const OrderManager: React.FC = () => {
     'Wrong amount',
     'Order cancelled',
   ];
-  const notificationVolumeRef = useRef<number>(0.5);
-  
+
   // Get order option from site settings
   const orderOption = siteSettings?.order_option || 'order_via_messenger';
 
-  // Initial fetch when Orders view is shown
+  // Initial fetch when Orders view is shown; updates after that come from useOrders realtime subscription
+  // Notification sound for new orders is played from AdminDashboard (works from any admin page)
   useEffect(() => {
     fetchOrders(100);
   }, []);
-
-  // Poll for new orders only when order_option is 'place_order'; stop polling when 'order_via_messenger'
-  useEffect(() => {
-    if (orderOption !== 'place_order') return;
-    const interval = setInterval(() => fetchOrders(100), 10000); // every 10s
-    return () => clearInterval(interval);
-  }, [orderOption]);
-
-  // Fetch notification volume from settings
-  useEffect(() => {
-    const fetchNotificationVolume = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('value')
-          .eq('id', 'notification_volume')
-          .single();
-
-        if (!error && data?.value) {
-          const volume = parseFloat(data.value);
-          if (!isNaN(volume) && volume >= 0 && volume <= 1) {
-            notificationVolumeRef.current = volume;
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching notification volume:', err);
-      }
-    };
-
-    fetchNotificationVolume();
-  }, []);
-
-  // Initialize previous order IDs after first load (only for place_order mode)
-  useEffect(() => {
-    // Only track orders if order_option is 'place_order'
-    if (orderOption === 'place_order' && orders.length > 0 && previousOrderIdsRef.current.size === 0) {
-      // Initialize with current order IDs on first load (don't play sound)
-      previousOrderIdsRef.current = new Set(orders.map(o => o.id));
-    } else if (orderOption === 'order_via_messenger') {
-      // Clear tracking when switching to order_via_messenger mode
-      previousOrderIdsRef.current = new Set();
-    }
-  }, [orders, orderOption]);
-
-  // Play notification sound when new orders arrive (only for place_order mode)
-  useEffect(() => {
-    // Only check for new orders if order_option is 'place_order'
-    if (orderOption !== 'place_order') {
-      return;
-    }
-
-    // Skip if this is the initial load (no previous orders tracked)
-    if (previousOrderIdsRef.current.size === 0) {
-      return;
-    }
-
-    if (orders.length === 0) {
-      return;
-    }
-
-    // Get current order IDs
-    const currentOrderIds = new Set(orders.map(o => o.id));
-
-    // Find new orders (orders that weren't in the previous set)
-    const newOrders = orders.filter(order => {
-      // Play sound for new orders with pending status
-      return !previousOrderIdsRef.current.has(order.id) && 
-             order.status === 'pending';
-    });
-
-    // Play notification sound for each new order
-    if (newOrders.length > 0) {
-      try {
-        const audio = new Audio('/notifSound.mp3');
-        audio.volume = notificationVolumeRef.current;
-        audio.play().catch(err => {
-          console.error('Error playing notification sound:', err);
-        });
-      } catch (err) {
-        console.error('Error creating audio element:', err);
-      }
-    }
-
-    // Update previous order IDs
-    previousOrderIdsRef.current = currentOrderIds;
-  }, [orders, orderOption]);
 
   // Fetch member information for orders
   useEffect(() => {
