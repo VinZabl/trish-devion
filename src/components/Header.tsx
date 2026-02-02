@@ -25,19 +25,19 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
         <div className="flex items-center justify-between min-h-10 md:min-h-12">
           <button 
             onClick={onMenuClick}
-            className="text-white hover:opacity-80 transition-colors duration-200 flex items-center gap-3"
+            className="text-white hover:opacity-80 transition-colors duration-200 flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial justify-start"
           >
             <img 
               src={logoUrl}
               alt={`${siteSettings?.site_name || 'Trish Devion'} Logo`}
-              className="h-10 sm:h-12 md:h-12 w-auto object-contain flex-shrink-0"
+              className="h-8 sm:h-10 md:h-12 w-auto object-contain flex-shrink-0"
               onError={(e) => {
                 if (e.currentTarget.src !== '/logo.png') {
                   e.currentTarget.src = '/logo.png';
                 }
               }}
             />
-            <span className="text-base sm:text-lg md:text-lg font-bold text-white whitespace-nowrap">
+            <span className="text-xs sm:text-sm md:text-base font-bold text-white truncate">
               {siteSettings?.site_name || 'Trish Devion'}
             </span>
           </button>
