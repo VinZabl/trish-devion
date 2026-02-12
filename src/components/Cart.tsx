@@ -11,6 +11,7 @@ interface CartProps {
   getTotalPrice: () => number;
   onContinueShopping: () => void;
   onCheckout: () => void;
+  hasProcessingOrder?: boolean;
 }
 
 const Cart: React.FC<CartProps> = ({
@@ -21,7 +22,8 @@ const Cart: React.FC<CartProps> = ({
   clearCart,
   getTotalPrice,
   onContinueShopping,
-  onCheckout
+  onCheckout,
+  hasProcessingOrder = false
 }) => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -258,6 +260,11 @@ const Cart: React.FC<CartProps> = ({
       </div>
 
       <div className="glass-card rounded-xl p-4 flex-shrink-0" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+        {hasProcessingOrder && (
+          <p className="text-xs text-cafe-primary font-medium mb-3 text-center">
+            You have an order being processed. Please wait for it to complete before placing another.
+          </p>
+        )}
         <div className="flex items-center justify-between text-sm font-semibold text-cafe-text mb-4">
           <span>Total:</span>
           <span className="text-white">₱{(getTotalPrice() || 0).toFixed(2)}</span>
@@ -273,7 +280,12 @@ const Cart: React.FC<CartProps> = ({
           </button>
           <button
             onClick={onCheckout}
-            className="flex-1 text-white py-2 rounded-xl bg-cafe-primary hover:bg-cafe-secondary hover:opacity-90 transition-all duration-200 transform hover:scale-[1.02] font-medium text-sm"
+            disabled={hasProcessingOrder}
+            className={`flex-1 text-white py-2 rounded-xl font-medium text-sm transition-all duration-200 ${
+              hasProcessingOrder
+                ? 'bg-cafe-primary/50 cursor-not-allowed opacity-80'
+                : 'bg-cafe-primary hover:bg-cafe-secondary hover:opacity-90 transform hover:scale-[1.02]'
+            }`}
           >
             Checkout
           </button>

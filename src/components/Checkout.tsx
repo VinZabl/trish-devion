@@ -15,9 +15,10 @@ interface CheckoutProps {
   totalPrice: number;
   onBack: () => void;
   onNavigateToMenu?: () => void; // Callback to navigate to menu (e.g., after order succeeded)
+  hasProcessingOrder?: boolean;
 }
 
-const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, totalPrice, onBack, onNavigateToMenu }) => {
+const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, totalPrice, onBack, onNavigateToMenu, hasProcessingOrder = false }) => {
   const { paymentMethods } = usePaymentMethods();
   const { uploadImage, uploading: uploadingReceipt } = useImageUpload();
   const { createOrder } = useOrders();
@@ -1813,24 +1814,29 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, t
             </>
           ) : (
             <>
+              {hasProcessingOrder && (
+                <p className="text-sm text-cafe-primary font-medium mb-3 text-center">
+                  You have an order being processed. Please wait for it to complete before placing another order.
+                </p>
+              )}
               {/* Place Order button - for place_order option */}
               <button
                 onClick={handlePlaceOrderDirect}
-                disabled={!paymentMethod || !receiptImageUrl || uploadingReceipt || isPlacingOrder}
+                disabled={hasProcessingOrder || !paymentMethod || !receiptImageUrl || uploadingReceipt || isPlacingOrder}
                 className={`relative w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${
-                  paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
+                  !hasProcessingOrder && paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
                     ? 'text-white bg-cafe-primary hover:bg-cafe-secondary hover:opacity-90 hover:scale-[1.02]'
                     : 'glass text-cafe-textMuted cursor-not-allowed'
                 }`}
               >
                 <div className={`absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
+                  !hasProcessingOrder && paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
                     ? 'bg-cafe-primary text-white'
                     : 'bg-cafe-textMuted/30 text-cafe-textMuted'
                 }`}>
                   4
                 </div>
-                {isPlacingOrder ? 'Placing Order...' : 'Place Order'}
+                {isPlacingOrder ? 'Placing Order...' : hasProcessingOrder ? 'Wait for current order' : 'Place Order'}
               </button>
             </>
           )}

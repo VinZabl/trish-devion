@@ -98,10 +98,12 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
               if ((order?.status === 'approved' || order?.status === 'rejected') && onSucceededClose) {
                 onSucceededClose();
               } else {
+                // Still processing: close modal so user can browse; they can't place another order until this one completes
                 onClose();
               }
             }}
             className="p-2 glass-strong rounded-lg hover:bg-cafe-primary/20 transition-colors duration-200"
+            aria-label="Close"
           >
             <X className="h-5 w-5 text-cafe-text" />
           </button>
@@ -124,6 +126,11 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
               {order.created_at && (
                 <p className="text-sm text-cafe-textMuted">
                   {new Date(order.created_at).toLocaleString()}
+                </p>
+              )}
+              {(order.status === 'pending' || order.status === 'processing') && (
+                <p className="text-xs text-cafe-textMuted mt-2 text-center max-w-sm">
+                  You can close this and browse the site. You won&apos;t be able to place another order until this one is processed.
                 </p>
               )}
               {order.status === 'rejected' && order.rejection_message && (

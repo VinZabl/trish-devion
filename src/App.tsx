@@ -216,6 +216,27 @@ function MainApp() {
     checkPendingOrder();
   }, [authLoading, fetchOrderById]);
 
+  // When user closed the modal but order is still processing, poll and clear state once order completes
+  React.useEffect(() => {
+    if (!pendingOrderId || showOrderStatusModal) return;
+
+    const checkOrderCompleted = async () => {
+      try {
+        const order = await fetchOrderById(pendingOrderId);
+        if (order && (order.status === 'approved' || order.status === 'rejected')) {
+          localStorage.removeItem('pendingPlaceOrderId');
+          setPendingOrderId(null);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const interval = setInterval(checkOrderCompleted, 8000);
+    return () => clearInterval(interval);
+  }, [pendingOrderId, showOrderStatusModal, fetchOrderById]);
+
+  const hasProcessingOrder = pendingOrderId != null;
 
   const handleMemberClick = () => {
     if (currentMember) {
@@ -313,6 +334,7 @@ function MainApp() {
           getTotalPrice={cart.getTotalPrice}
           onContinueShopping={() => handleViewChange('menu')}
           onCheckout={() => handleViewChange('checkout')}
+          hasProcessingOrder={hasProcessingOrder}
         />
       )}
       
@@ -326,6 +348,7 @@ function MainApp() {
             cart.clearCart();
             handleViewChange('menu');
           }}
+          hasProcessingOrder={hasProcessingOrder}
         />
       )}
 
