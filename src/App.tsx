@@ -16,6 +16,7 @@ import { useMenu } from './hooks/useMenu';
 import { useMemberAuth } from './hooks/useMemberAuth';
 import { useOrders } from './hooks/useOrders';
 import Footer from './components/Footer';
+import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
 
 function MainApp() {
   const { currentMember, logout, loading: authLoading } = useMemberAuth();
@@ -38,6 +39,7 @@ function MainApp() {
   const [showMemberProfile, setShowMemberProfile] = React.useState(false);
   const [justLoggedIn, setJustLoggedIn] = React.useState(false);
   const [pendingOrderId, setPendingOrderId] = React.useState<string | null>(null);
+  const [pendingOrderStatus, setPendingOrderStatus] = React.useState<'pending' | 'processing' | 'approved' | 'rejected' | null>(null);
   const [showOrderStatusModal, setShowOrderStatusModal] = React.useState(false);
 
   // Save state to localStorage whenever it changes
@@ -179,12 +181,16 @@ function MainApp() {
     }
   }, [currentMember, currentView, authLoading]);
 
-  // Check for pending order with "place_order" option when app loads
+  // Check for pending order with "place_order" option when app loads (runs ONCE after auth loads)
+  const hasCheckedPendingOrder = React.useRef(false);
   React.useEffect(() => {
-    const checkPendingOrder = async () => {
-      // Wait for auth to finish loading
-      if (authLoading) return;
+    // Wait for auth to finish loading
+    if (authLoading) return;
+    // Only run this check once
+    if (hasCheckedPendingOrder.current) return;
+    hasCheckedPendingOrder.current = true;
 
+    const checkPendingOrder = async () => {
       // Check localStorage for pending order ID
       const storedOrderId = localStorage.getItem('pendingPlaceOrderId');
       if (!storedOrderId) return;
@@ -194,12 +200,16 @@ function MainApp() {
         const order = await fetchOrderById(storedOrderId);
         
         if (order && order.order_option === 'place_order') {
-          // Only show modal if order is still pending or processing
+          // Show modal/banner for any non-cleared order
           if (order.status === 'pending' || order.status === 'processing') {
             setPendingOrderId(storedOrderId);
+            setPendingOrderStatus(order.status);
             setShowOrderStatusModal(true);
+          } else if (order.status === 'approved' || order.status === 'rejected') {
+            // Order completed but user hasn't seen it yet — show banner (not modal)
+            setPendingOrderId(storedOrderId);
+            setPendingOrderStatus(order.status);
           } else {
-            // Order is completed (approved/rejected), clear localStorage
             localStorage.removeItem('pendingPlaceOrderId');
           }
         } else {
@@ -216,16 +226,17 @@ function MainApp() {
     checkPendingOrder();
   }, [authLoading, fetchOrderById]);
 
-  // When user closed the modal but order is still processing, poll and clear state once order completes
+  // When user closed the modal but order is still processing, poll and update status
   React.useEffect(() => {
     if (!pendingOrderId || showOrderStatusModal) return;
+    // If already resolved, no need to poll
+    if (pendingOrderStatus === 'approved' || pendingOrderStatus === 'rejected') return;
 
     const checkOrderCompleted = async () => {
       try {
         const order = await fetchOrderById(pendingOrderId);
-        if (order && (order.status === 'approved' || order.status === 'rejected')) {
-          localStorage.removeItem('pendingPlaceOrderId');
-          setPendingOrderId(null);
+        if (order) {
+          setPendingOrderStatus(order.status as 'pending' | 'processing' | 'approved' | 'rejected');
         }
       } catch {
         // ignore
@@ -234,7 +245,7 @@ function MainApp() {
 
     const interval = setInterval(checkOrderCompleted, 8000);
     return () => clearInterval(interval);
-  }, [pendingOrderId, showOrderStatusModal, fetchOrderById]);
+  }, [pendingOrderId, pendingOrderStatus, showOrderStatusModal, fetchOrderById]);
 
   const hasProcessingOrder = pendingOrderId != null;
 
@@ -311,6 +322,42 @@ function MainApp() {
         </div>
       )}
       
+      {/* Order status banner — visible when modal is closed but there's a pending/completed order */}
+      {pendingOrderId && !showOrderStatusModal && currentView !== 'member-login' && (
+        <button
+          type="button"
+          onClick={() => setShowOrderStatusModal(true)}
+          className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium transition-colors duration-200 ${
+            pendingOrderStatus === 'approved'
+              ? 'bg-green-500/15 border-b border-green-500/30 text-green-400 hover:bg-green-500/25'
+              : pendingOrderStatus === 'rejected'
+              ? 'bg-red-500/15 border-b border-red-500/30 text-red-400 hover:bg-red-500/25'
+              : 'bg-cafe-primary/15 border-b border-cafe-primary/30 text-cafe-primary hover:bg-cafe-primary/25'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {pendingOrderStatus === 'approved' ? (
+              <CheckCircle className="h-4 w-4 flex-shrink-0" />
+            ) : pendingOrderStatus === 'rejected' ? (
+              <XCircle className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+            )}
+            <span>
+              {pendingOrderStatus === 'approved'
+                ? 'Your order has been approved!'
+                : pendingOrderStatus === 'rejected'
+                ? 'Your order was declined.'
+                : 'Your order is being processed…'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0 opacity-80">
+            <Eye className="h-4 w-4" />
+            <span>View</span>
+          </div>
+        </button>
+      )}
+
       {currentView === 'menu' && (
         <Menu 
           menuItems={filteredMenuItems}
@@ -382,10 +429,11 @@ function MainApp() {
           // Don't clear localStorage here - let it clear when order is completed
         }}
         onSucceededClose={() => {
-          // Order is approved/rejected, clear localStorage and close modal
+          // Order is approved/rejected, clear everything
           localStorage.removeItem('pendingPlaceOrderId');
           setShowOrderStatusModal(false);
           setPendingOrderId(null);
+          setPendingOrderStatus(null);
         }}
       />
       

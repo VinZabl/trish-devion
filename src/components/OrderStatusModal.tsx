@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { useOrders } from '../hooks/useOrders';
@@ -62,6 +63,16 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
 
   if (!isOpen) return null;
 
+  const handleClose = (e?: React.MouseEvent | React.PointerEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if ((order?.status === 'approved' || order?.status === 'rejected') && onSucceededClose) {
+      onSucceededClose();
+    } else {
+      onClose();
+    }
+  };
+
   const getStatusDisplay = (status: OrderStatus) => {
     switch (status) {
       case 'pending':
@@ -80,9 +91,21 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
   const statusDisplay = order ? getStatusDisplay(order.status) : null;
   const StatusIcon = statusDisplay?.icon || Loader2;
 
-  return (
-    <div className="modal-overlay fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="glass-card rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+  const modalContent = (
+    <div
+      className="modal-overlay fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={handleClose}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) handleClose(e); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Order status"
+      style={{ touchAction: 'manipulation' }}
+    >
+      <div
+        className="glass-card rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-semibold text-cafe-text">Order Status</h2>
@@ -93,19 +116,14 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
             )}
           </div>
           <button
-            onClick={() => {
-              // If order is completed (approved or rejected) and onSucceededClose is provided, call it
-              if ((order?.status === 'approved' || order?.status === 'rejected') && onSucceededClose) {
-                onSucceededClose();
-              } else {
-                // Still processing: close modal so user can browse; they can't place another order until this one completes
-                onClose();
-              }
-            }}
-            className="p-2 glass-strong rounded-lg hover:bg-cafe-primary/20 transition-colors duration-200"
+            type="button"
+            onClick={handleClose}
+            onPointerDown={(e) => { e.preventDefault(); handleClose(e); }}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 glass-strong rounded-lg hover:bg-cafe-primary/20 active:bg-cafe-primary/30 transition-colors duration-200 touch-manipulation cursor-pointer"
+            style={{ touchAction: 'manipulation' }}
             aria-label="Close"
           >
-            <X className="h-5 w-5 text-cafe-text" />
+            <X className="h-5 w-5 text-cafe-text pointer-events-none" />
           </button>
         </div>
 
@@ -217,6 +235,8 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default OrderStatusModal;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Order, CreateOrderData, OrderStatus } from '../types';
 import { useSiteSettings } from './useSiteSettings';
@@ -54,8 +54,8 @@ export const useOrders = () => {
     }
   };
 
-  // Fetch a single order by ID
-  const fetchOrderById = async (orderId: string): Promise<Order | null> => {
+  // Fetch a single order by ID (memoized – stable reference across renders)
+  const fetchOrderById = useCallback(async (orderId: string): Promise<Order | null> => {
     try {
       const { data, error: fetchError } = await supabase
         .from('orders')
@@ -70,7 +70,7 @@ export const useOrders = () => {
       console.error('Error fetching order:', err);
       return null;
     }
-  };
+  }, []);
 
   // Create a new order
   const createOrder = async (orderData: CreateOrderData): Promise<Order | null> => {
