@@ -23,8 +23,12 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   const [selectedVariation, setSelectedVariation] = useState<Variation | undefined>(
     item.variations?.[0]
   );
+  const [descriptionExpanded, setDescriptionExpanded] = useState(true);
   const nameRef = useRef<HTMLHeadingElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
+
+  const DESCRIPTION_COLLAPSE_THRESHOLD = 120;
+  const descriptionLong = item.description && item.description.length > DESCRIPTION_COLLAPSE_THRESHOLD;
   const { currentMember, isReseller } = useMemberAuth();
   const { getDiscountForItem } = useMemberDiscounts();
   const [memberDiscounts, setMemberDiscounts] = useState<Record<string, number>>({});
@@ -107,6 +111,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
 
   const handleCardClick = () => {
     if (!item.available) return;
+    setDescriptionExpanded(true);
     setShowCustomization(true);
   };
 
@@ -266,7 +271,22 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                     <p className="text-sm text-cafe-primary/95 mt-1 drop-shadow-md">{item.subtitle}</p>
                 )}
                 {item.description && (
-                    <p className="text-sm text-white/90 mt-2 drop-shadow-md whitespace-pre-line break-words">{item.description}</p>
+                    <div className="mt-2">
+                      {(!descriptionLong || descriptionExpanded) && (
+                        <p className="text-xs text-white/90 drop-shadow-md whitespace-pre-line break-words">
+                          {item.description}
+                        </p>
+                      )}
+                      {descriptionLong && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setDescriptionExpanded((v) => !v); }}
+                          className="text-xs text-cafe-primary hover:text-cafe-primary/80 mt-1 font-medium"
+                        >
+                          {descriptionExpanded ? 'Show less' : 'Show more'}
+                        </button>
+                      )}
+                    </div>
                 )}
               </div>
               <button
@@ -295,7 +315,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 }}
               />
               
-              <div className="p-4 md:p-5 pt-3">
+              <div className="p-4 md:p-5 pt-6">
                 {/* Show currency packages grouped by category */}
                 {item.variations && item.variations.length > 0 ? (
                   (() => {
