@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, LogOut, History, User, ArrowLeft } from 'lucide-react';
 import { useMemberAuth } from '../hooks/useMemberAuth';
+import { useOrders } from '../hooks/useOrders';
 import { supabase } from '../lib/supabase';
 import { Order } from '../types';
+
+/** Minimal order for list; full order fetched when user opens detail */
+type OrderListItem = { id: string; invoice_number?: string | null; status: Order['status']; order_option?: string | null; total_price: number; created_at: string };
 
 interface MemberProfileProps {
   onClose: () => void;
@@ -11,7 +15,8 @@ interface MemberProfileProps {
 
 const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
   const { currentMember, isReseller } = useMemberAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { fetchOrderById } = useOrders({ subscribeRealtime: false });
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -27,12 +32,13 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
       setLoadingOrders(true);
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('id, invoice_number, status, order_option, total_price, created_at')
         .eq('member_id', currentMember?.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
-      setOrders(data as Order[]);
+      setOrders((data || []) as OrderListItem[]);
     } catch (err) {
       console.error('Error fetching member orders:', err);
       setOrders([]);
@@ -41,21 +47,25 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
     }
   };
 
+  const openOrderDetail = async (order: OrderListItem) => {
+    const full = await fetchOrderById(order.id);
+    setSelectedOrder(full);
+  };
+
   const handleLogout = () => {
     onLogout();
     onClose();
   };
 
-  const getOrderStatus = (order: Order) => {
+  const getOrderStatus = (order: Order | OrderListItem) => {
     const orderOption = order.order_option || 'place_order';
-    // For messenger orders with pending status, show "Done via Messenger"
     if (orderOption === 'order_via_messenger' && order.status === 'pending') {
       return 'Done via Messenger';
     }
     return order.status;
   };
 
-  const getOrderStatusClass = (order: Order) => {
+  const getOrderStatusClass = (order: Order | OrderListItem) => {
     const displayStatus = getOrderStatus(order);
     if (displayStatus === 'Done via Messenger' || displayStatus === 'approved') {
       return 'bg-green-500/20 text-green-300';
@@ -156,7 +166,7 @@ const MemberProfile: React.FC<MemberProfileProps> = ({ onClose, onLogout }) => {
                   {orders.map((order) => (
                     <div
                       key={order.id}
-                      onClick={() => setSelectedOrder(order)}
+                      onClick={() => openOrderDetail(order)}
                       className="glass-strong rounded-lg p-4 border border-cafe-primary/30 cursor-pointer hover:bg-cafe-primary/10 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2">

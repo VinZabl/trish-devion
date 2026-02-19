@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingCart, Coins } from 'lucide-react';
+import { ShoppingCart, Coins, ListOrdered } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { Member } from '../types';
 
@@ -9,9 +9,10 @@ interface HeaderProps {
   onMenuClick: () => void;
   onMemberClick?: () => void;
   currentMember?: Member | null;
+  onOpenMyOrders?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClick, onMemberClick, currentMember }) => {
+const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClick, onMemberClick, currentMember, onOpenMyOrders }) => {
   const { siteSettings } = useSiteSettings();
   const logoUrl = (siteSettings?.site_logo && siteSettings.site_logo.trim() !== '') ? siteSettings.site_logo : '/logo.png';
 
@@ -43,6 +44,17 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
           </button>
 
           <div className="flex items-center space-x-2">
+            {onOpenMyOrders && (
+              <button
+                type="button"
+                onClick={onOpenMyOrders}
+                className="p-2 text-cafe-text hover:text-cafe-primary hover:bg-cafe-primary/20 rounded-full transition-colors duration-200"
+                title="My orders"
+                aria-label="My orders"
+              >
+                <ListOrdered className="h-5 w-5" />
+              </button>
+            )}
             {/* Welcome back text - Desktop only */}
             {currentMember && (
               <div className="hidden md:flex items-center gap-2 mr-2">

@@ -12,54 +12,54 @@ interface OrderStatusModalProps {
 }
 
 const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, onClose, onSucceededClose }) => {
-  const { fetchOrderById } = useOrders();
+  const { fetchOrderById } = useOrders({ subscribeRealtime: false });
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const isInitialLoad = useRef(true);
-
-  useEffect(() => {
-    if (isOpen && orderId) {
-      isInitialLoad.current = true;
-      loadOrder(true);
-      // Poll for order updates every 3 seconds
-      const interval = setInterval(() => loadOrder(false), 3000);
-      return () => clearInterval(interval);
-    } else {
-      // Reset when modal closes
-      setOrder(null);
-      setLoading(true);
-      isInitialLoad.current = true;
-    }
-  }, [isOpen, orderId]);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadOrder = async (isInitial: boolean) => {
     if (!orderId) return;
-    
-    if (isInitial) {
-      setLoading(true);
-    }
-    
+    if (isInitial) setLoading(true);
+
     const orderData = await fetchOrderById(orderId);
-    
     if (orderData) {
-      // Only update if status or updated_at changed (indicating a real update)
-      // Do not auto-close on approve/reject; user closes via X to dismiss the banner
       setOrder(prevOrder => {
-        if (!prevOrder || isInitial) {
-          return orderData;
-        }
-        if (prevOrder.status !== orderData.status || prevOrder.updated_at !== orderData.updated_at) {
-          return orderData;
-        }
+        if (!prevOrder || isInitial) return orderData;
+        if (prevOrder.status !== orderData.status || prevOrder.updated_at !== orderData.updated_at) return orderData;
         return prevOrder;
       });
+      // Stop polling once order is terminal to reduce egress
+      if (orderData.status === 'approved' || orderData.status === 'rejected') {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
     }
-    
     if (isInitial) {
       setLoading(false);
       isInitialLoad.current = false;
     }
   };
+
+  useEffect(() => {
+    if (isOpen && orderId) {
+      isInitialLoad.current = true;
+      loadOrder(true);
+      // Poll every 5s (reduced from 3s for egress); cleared when order is approved/rejected
+      pollIntervalRef.current = setInterval(() => loadOrder(false), 5000);
+      return () => {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      };
+    }
+    setOrder(null);
+    setLoading(true);
+    isInitialLoad.current = true;
+  }, [isOpen, orderId]);
 
   if (!isOpen) return null;
 

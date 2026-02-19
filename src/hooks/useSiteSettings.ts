@@ -14,7 +14,7 @@ export const useSiteSettings = () => {
 
       const { data, error } = await supabase
         .from('site_settings')
-        .select('*')
+        .select('id, value')
         .order('id');
 
       if (error) throw error;
@@ -38,6 +38,7 @@ export const useSiteSettings = () => {
         hero_image_3: data.find(s => s.id === 'hero_image_3')?.value || '',
         hero_image_4: data.find(s => s.id === 'hero_image_4')?.value || '',
         hero_image_5: data.find(s => s.id === 'hero_image_5')?.value || '',
+        customer_side_open: data.find(s => s.id === 'customer_side_open')?.value || 'true',
       };
 
       setSiteSettings(settings);

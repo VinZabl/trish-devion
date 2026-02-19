@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, ArrowUpDown, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, Star, Activity, FilePlus, List, FolderTree, Wallet, Cog, Trophy, DollarSign, Clock, Gamepad2, Copy } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, Lock, FolderOpen, CreditCard, Settings, ArrowUpDown, ChevronDown, ChevronUp, ShoppingBag, CheckCircle, Star, Activity, FilePlus, List, FolderTree, Wallet, Cog, Trophy, DollarSign, Clock, Gamepad2, Copy, Store, DoorClosed } from 'lucide-react';
 import { MenuItem, Variation, CustomField } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -13,8 +13,18 @@ import { supabase } from '../lib/supabase';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 
 const AdminDashboard: React.FC = () => {
-  const { siteSettings } = useSiteSettings();
+  const { siteSettings, updateSiteSetting, refetch: refetchSiteSettings } = useSiteSettings();
   const orderOption = siteSettings?.order_option || 'order_via_messenger';
+  const customerSideOpen = siteSettings?.customer_side_open !== 'false';
+
+  const handleToggleCustomerSide = useCallback(async () => {
+    try {
+      await updateSiteSetting('customer_side_open', customerSideOpen ? 'false' : 'true');
+      refetchSiteSettings();
+    } catch (e) {
+      console.error('Failed to toggle customer side', e);
+    }
+  }, [customerSideOpen, updateSiteSetting, refetchSiteSettings]);
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('beracah_admin_auth') === 'true';
@@ -2220,6 +2230,37 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Customer site Open / Close */}
+        <div
+          className={`mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+            customerSideOpen
+              ? 'border-green-200 bg-green-50'
+              : 'border-amber-200 bg-amber-50'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {customerSideOpen ? (
+              <Store className="h-5 w-5 text-green-600" />
+            ) : (
+              <DoorClosed className="h-5 w-5 text-amber-600" />
+            )}
+            <span className={`text-sm font-medium ${customerSideOpen ? 'text-green-800' : 'text-amber-800'}`}>
+              Customer site is {customerSideOpen ? 'open' : 'closed'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleCustomerSide}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              customerSideOpen
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-amber-600 text-white hover:bg-amber-700'
+            }`}
+          >
+            {customerSideOpen ? 'Close store' : 'Open store'}
+          </button>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">

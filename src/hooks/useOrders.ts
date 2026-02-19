@@ -3,7 +3,15 @@ import { supabase } from '../lib/supabase';
 import { Order, CreateOrderData, OrderStatus } from '../types';
 import { useSiteSettings } from './useSiteSettings';
 
-export const useOrders = () => {
+const ORDER_SELECT = 'id, invoice_number, order_items, customer_info, payment_method_id, receipt_url, total_price, status, order_option, member_id, rejection_message, created_at, updated_at';
+
+export interface UseOrdersOptions {
+  /** Set false on customer side to avoid Realtime egress; default true for admin */
+  subscribeRealtime?: boolean;
+}
+
+export const useOrders = (options: UseOrdersOptions = {}) => {
+  const { subscribeRealtime = true } = options;
   const { siteSettings } = useSiteSettings();
   const orderOption = siteSettings?.order_option || 'order_via_messenger';
 
@@ -54,18 +62,18 @@ export const useOrders = () => {
     }
   };
 
-  // Fetch a single order by ID (memoized – stable reference across renders)
+  // Fetch a single order by ID (memoized – stable reference, minimal columns to reduce egress)
   const fetchOrderById = useCallback(async (orderId: string): Promise<Order | null> => {
     try {
       const { data, error: fetchError } = await supabase
         .from('orders')
-        .select('*')
+        .select(ORDER_SELECT)
         .eq('id', orderId)
         .single();
 
       if (fetchError) throw fetchError;
 
-      return data;
+      return data as Order;
     } catch (err) {
       console.error('Error fetching order:', err);
       return null;
@@ -88,7 +96,7 @@ export const useOrders = () => {
           invoice_number: orderData.invoice_number || null,
           status: 'pending',
         })
-        .select()
+        .select(ORDER_SELECT)
         .single();
 
       if (createError) throw createError;
@@ -144,10 +152,9 @@ export const useOrders = () => {
     }
   };
 
-  // Subscribe to order changes via Supabase Realtime (no polling – efficient on egress)
-  // Only when order_option is 'place_order'; when order_via_messenger, no subscription
+  // Subscribe to order changes via Supabase Realtime (only in admin to reduce customer egress)
   useEffect(() => {
-    if (orderOption !== 'place_order') return;
+    if (!subscribeRealtime || orderOption !== 'place_order') return;
 
     const channel = supabase
       .channel('orders-realtime')
@@ -180,7 +187,7 @@ export const useOrders = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orderOption]);
+  }, [orderOption, subscribeRealtime]);
 
   return {
     orders,

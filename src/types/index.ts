@@ -110,6 +110,8 @@ export interface SiteSettings {
   hero_image_3?: string;
   hero_image_4?: string;
   hero_image_5?: string;
+  // Customer side open/closed (admin toggle on homepage header)
+  customer_side_open?: string; // 'true' | 'false'
 }
 
 // Order Types

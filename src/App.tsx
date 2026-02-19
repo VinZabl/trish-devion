@@ -12,17 +12,22 @@ import MemberLogin from './components/MemberLogin';
 import WelcomeModal from './components/WelcomeModal';
 import MemberProfile from './components/MemberProfile';
 import OrderStatusModal from './components/OrderStatusModal';
+import MyOrdersModal from './components/MyOrdersModal';
 import { useMenu } from './hooks/useMenu';
 import { useMemberAuth } from './hooks/useMemberAuth';
 import { useOrders } from './hooks/useOrders';
+import { useSiteSettings } from './hooks/useSiteSettings';
 import Footer from './components/Footer';
-import { Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 function MainApp() {
   const { currentMember, logout, loading: authLoading } = useMemberAuth();
+  const { siteSettings } = useSiteSettings();
+  const orderOption = siteSettings?.order_option || 'order_via_messenger';
   const cart = useCart(currentMember);
   const { menuItems } = useMenu();
-  const { fetchOrderById } = useOrders();
+  const { fetchOrderById } = useOrders({ subscribeRealtime: false });
+  const customerSideOpen = siteSettings?.customer_side_open !== 'false';
   
   // Load saved state from localStorage on mount
   const [currentView, setCurrentView] = React.useState<'menu' | 'cart' | 'checkout' | 'member-login'>(() => {
@@ -41,6 +46,7 @@ function MainApp() {
   const [pendingOrderId, setPendingOrderId] = React.useState<string | null>(null);
   const [pendingOrderStatus, setPendingOrderStatus] = React.useState<'pending' | 'processing' | 'approved' | 'rejected' | null>(null);
   const [showOrderStatusModal, setShowOrderStatusModal] = React.useState(false);
+  const [showMyOrdersModal, setShowMyOrdersModal] = React.useState(false);
 
   // Save state to localStorage whenever it changes
   React.useEffect(() => {
@@ -243,11 +249,15 @@ function MainApp() {
       }
     };
 
-    const interval = setInterval(checkOrderCompleted, 8000);
+    const interval = setInterval(checkOrderCompleted, 12000);
     return () => clearInterval(interval);
   }, [pendingOrderId, pendingOrderStatus, showOrderStatusModal, fetchOrderById]);
 
-  const hasProcessingOrder = pendingOrderId != null;
+  const handleOrderPlaced = React.useCallback((orderId: string) => {
+    setPendingOrderId(orderId);
+    setPendingOrderStatus('pending');
+    setShowOrderStatusModal(true);
+  }, []);
 
   const handleMemberClick = () => {
     if (currentMember) {
@@ -308,8 +318,9 @@ function MainApp() {
             onMenuClick={() => handleViewChange('menu')}
             onMemberClick={handleMemberClick}
             currentMember={currentMember}
+            onOpenMyOrders={orderOption === 'place_order' ? () => setShowMyOrdersModal(true) : undefined}
           />
-          {currentView === 'menu' && (
+          {customerSideOpen && currentView === 'menu' && (
             <SubNav
               selectedCategory={selectedCategory}
               onCategoryClick={handleCategoryClick}
@@ -321,21 +332,31 @@ function MainApp() {
           )}
         </div>
       )}
+
+      {/* When admin closed customer side: show header + closed message only */}
+      {!customerSideOpen && currentView !== 'member-login' && (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
+          <p className="text-xl font-semibold text-cafe-text">Store is currently closed</p>
+          <p className="text-cafe-textMuted mt-2">Please check back later.</p>
+        </div>
+      )}
       
-      {/* Order status banner — visible when modal is closed but there's a pending/completed order */}
-      {pendingOrderId && !showOrderStatusModal && currentView !== 'member-login' && (
-        <button
-          type="button"
-          onClick={() => setShowOrderStatusModal(true)}
+      {/* Order status banner — visible until user dismisses (stays after order is processed so they can check status) */}
+      {customerSideOpen && pendingOrderId && !showOrderStatusModal && currentView !== 'member-login' && (
+        <div
           className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium transition-colors duration-200 ${
             pendingOrderStatus === 'approved'
-              ? 'bg-green-500/15 border-b border-green-500/30 text-green-400 hover:bg-green-500/25'
+              ? 'bg-green-500/15 border-b border-green-500/30 text-green-400'
               : pendingOrderStatus === 'rejected'
-              ? 'bg-red-500/15 border-b border-red-500/30 text-red-400 hover:bg-red-500/25'
-              : 'bg-cafe-primary/15 border-b border-cafe-primary/30 text-cafe-primary hover:bg-cafe-primary/25'
+              ? 'bg-red-500/15 border-b border-red-500/30 text-red-400'
+              : 'bg-cafe-primary/15 border-b border-cafe-primary/30 text-cafe-primary'
           }`}
         >
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowOrderStatusModal(true)}
+            className="flex items-center gap-2 min-w-0 flex-1 text-left"
+          >
             {pendingOrderStatus === 'approved' ? (
               <CheckCircle className="h-4 w-4 flex-shrink-0" />
             ) : pendingOrderStatus === 'rejected' ? (
@@ -350,15 +371,38 @@ function MainApp() {
                 ? 'Your order was declined.'
                 : 'Your order is being processed…'}
             </span>
+          </button>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <span
+              onClick={() => setShowMyOrdersModal(true)}
+              className="text-xs font-medium opacity-90 hover:underline cursor-pointer"
+            >
+              View all
+            </span>
+            {(pendingOrderStatus === 'approved' || pendingOrderStatus === 'rejected') && (
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('pendingPlaceOrderId');
+                  setPendingOrderId(null);
+                  setPendingOrderStatus(null);
+                }}
+                className="text-xs font-medium opacity-90 hover:underline cursor-pointer"
+              >
+                Dismiss
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0 opacity-80">
-            <Eye className="h-4 w-4" />
-            <span>View</span>
-          </div>
-        </button>
+        </div>
       )}
 
-      {currentView === 'menu' && (
+      <MyOrdersModal
+        isOpen={showMyOrdersModal}
+        onClose={() => setShowMyOrdersModal(false)}
+        currentMember={currentMember ?? null}
+      />
+
+      {customerSideOpen && currentView === 'menu' && (
         <Menu 
           menuItems={filteredMenuItems}
           addToCart={cart.addToCart}
@@ -371,7 +415,7 @@ function MainApp() {
         />
       )}
       
-      {currentView === 'cart' && (
+      {customerSideOpen && currentView === 'cart' && (
         <Cart 
           cartItems={cart.cartItems}
           getEffectiveUnitPrice={cart.getEffectiveUnitPrice}
@@ -381,11 +425,10 @@ function MainApp() {
           getTotalPrice={cart.getTotalPrice}
           onContinueShopping={() => handleViewChange('menu')}
           onCheckout={() => handleViewChange('checkout')}
-          hasProcessingOrder={hasProcessingOrder}
         />
       )}
       
-      {currentView === 'checkout' && (
+      {customerSideOpen && currentView === 'checkout' && (
         <Checkout 
           cartItems={cart.cartItems}
           getEffectiveUnitPrice={cart.getEffectiveUnitPrice}
@@ -395,11 +438,11 @@ function MainApp() {
             cart.clearCart();
             handleViewChange('menu');
           }}
-          hasProcessingOrder={hasProcessingOrder}
+          onOrderPlaced={handleOrderPlaced}
         />
       )}
 
-      {currentView === 'member-login' && (
+      {customerSideOpen && currentView === 'member-login' && (
         <MemberLogin 
           onBack={() => handleViewChange('menu')}
           onLoginSuccess={handleLoginSuccess}
@@ -429,20 +472,18 @@ function MainApp() {
           // Don't clear localStorage here - let it clear when order is completed
         }}
         onSucceededClose={() => {
-          // Order is approved/rejected, clear everything
-          localStorage.removeItem('pendingPlaceOrderId');
+          // Only close the modal; keep banner visible so user can dismiss it after checking status
           setShowOrderStatusModal(false);
-          setPendingOrderId(null);
-          setPendingOrderStatus(null);
         }}
       />
       
-      {currentView !== 'member-login' && (
+      {customerSideOpen && currentView !== 'member-login' && (
         <>
           <FloatingSupportButton />
           <Footer />
         </>
       )}
+      {!customerSideOpen && currentView !== 'member-login' && <Footer />}
     </div>
   );
 }

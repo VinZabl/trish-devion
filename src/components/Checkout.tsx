@@ -15,13 +15,13 @@ interface CheckoutProps {
   totalPrice: number;
   onBack: () => void;
   onNavigateToMenu?: () => void; // Callback to navigate to menu (e.g., after order succeeded)
-  hasProcessingOrder?: boolean;
+  onOrderPlaced?: (orderId: string) => void; // Notify App of new order so banner/modal show latest
 }
 
-const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, totalPrice, onBack, onNavigateToMenu, hasProcessingOrder = false }) => {
+const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, totalPrice, onBack, onNavigateToMenu, onOrderPlaced }) => {
   const { paymentMethods } = usePaymentMethods();
   const { uploadImage, uploading: uploadingReceipt } = useImageUpload();
-  const { createOrder } = useOrders();
+  const { createOrder } = useOrders({ subscribeRealtime: false });
   const { siteSettings } = useSiteSettings();
   const { currentMember } = useMemberAuth();
   const orderOption = siteSettings?.order_option || 'order_via_messenger';
@@ -1341,7 +1341,20 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, t
       if (savedOrderId) {
         // Store order ID in localStorage for "place_order" option so it can be shown when user returns
         localStorage.setItem('pendingPlaceOrderId', savedOrderId);
+        // Append to guest order list so "My Orders" can show them when not logged in
+        try {
+          const key = 'customerPlaceOrderIds';
+          const raw = localStorage.getItem(key);
+          const ids: string[] = raw ? JSON.parse(raw) : [];
+          if (!ids.includes(savedOrderId)) {
+            ids.unshift(savedOrderId);
+            localStorage.setItem(key, JSON.stringify(ids.slice(0, 30)));
+          }
+        } catch {
+          // ignore
+        }
         setIsOrderModalOpen(true);
+        onOrderPlaced?.(savedOrderId);
       } else {
         setReceiptError('Failed to create order. Please try again.');
       }
@@ -1814,29 +1827,24 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, getEffectiveUnitPrice, t
             </>
           ) : (
             <>
-              {hasProcessingOrder && (
-                <p className="text-sm text-cafe-primary font-medium mb-3 text-center">
-                  You have an order being processed. Please wait for it to complete before placing another order.
-                </p>
-              )}
               {/* Place Order button - for place_order option */}
               <button
                 onClick={handlePlaceOrderDirect}
-                disabled={hasProcessingOrder || !paymentMethod || !receiptImageUrl || uploadingReceipt || isPlacingOrder}
+                disabled={!paymentMethod || !receiptImageUrl || uploadingReceipt || isPlacingOrder}
                 className={`relative w-full py-4 rounded-xl font-medium text-lg transition-all duration-200 transform ${
-                  !hasProcessingOrder && paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
+                  paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
                     ? 'text-white bg-cafe-primary hover:bg-cafe-secondary hover:opacity-90 hover:scale-[1.02]'
                     : 'glass text-cafe-textMuted cursor-not-allowed'
                 }`}
               >
                 <div className={`absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  !hasProcessingOrder && paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
+                  paymentMethod && receiptImageUrl && !uploadingReceipt && !isPlacingOrder
                     ? 'bg-cafe-primary text-white'
                     : 'bg-cafe-textMuted/30 text-cafe-textMuted'
                 }`}>
                   4
                 </div>
-                {isPlacingOrder ? 'Placing Order...' : hasProcessingOrder ? 'Wait for current order' : 'Place Order'}
+                {isPlacingOrder ? 'Placing Order...' : 'Place Order'}
               </button>
             </>
           )}
