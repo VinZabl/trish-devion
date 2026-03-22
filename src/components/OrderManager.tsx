@@ -446,26 +446,54 @@ const OrderManager: React.FC = () => {
               <div className="bg-gray-50 rounded-lg p-3 md:p-4 border border-gray-200">
                 <h3 className="text-xs font-medium text-gray-900 mb-3 md:mb-4">Customer Information</h3>
                 <div className="space-y-1.5 md:space-y-2">
-                  {Object.entries(selectedOrder.customer_info)
-                    .filter(([key]) => key !== 'Payment Method')
-                    .map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between gap-2">
-                        <p className="text-xs text-gray-600 flex-1 min-w-0">
-                          <span className="font-medium text-gray-700">{key}:</span> <span className="break-words">{value}</span>
-                        </p>
-                        <button
-                          onClick={() => handleCopyField(key, value)}
-                          className="p-1 md:p-1.5 hover:bg-gray-200 rounded transition-colors duration-200 flex-shrink-0"
-                          title="Copy"
-                        >
-                          {copiedField === key ? (
-                            <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4 text-green-500" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5 md:h-4 md:w-4 text-gray-500" />
-                          )}
-                        </button>
+                  {Array.isArray(selectedOrder.customer_info) ? (
+                    selectedOrder.customer_info.map((info, idx) => (
+                      <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200">
+                        <p className="text-xs font-semibold text-gray-800 mb-2">{info.game} - {info.package}</p>
+                        <div className="space-y-2">
+                          {Object.entries(info.fields || {}).map(([key, val]) => (
+                            <div key={key} className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-gray-600 flex-1 min-w-0">
+                                <span className="font-medium text-gray-700">{key}:</span> <span className="break-words">{val}</span>
+                              </p>
+                              <button
+                                onClick={() => handleCopyField(key, val)}
+                                className="p-1 md:p-1.5 hover:bg-gray-200 rounded transition-colors duration-200 flex-shrink-0"
+                                title="Copy"
+                              >
+                                {copiedField === key ? (
+                                  <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 md:h-4 md:w-4 text-gray-500" />
+                                )}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
+                    ))
+                  ) : (
+                    Object.entries(selectedOrder.customer_info || {})
+                      .filter(([key]) => key !== 'Payment Method')
+                      .map(([key, value]) => (
+                        <div key={key} className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-gray-600 flex-1 min-w-0">
+                            <span className="font-medium text-gray-700">{key}:</span> <span className="break-words">{String(value)}</span>
+                          </p>
+                          <button
+                            onClick={() => handleCopyField(key, String(value))}
+                            className="p-1 md:p-1.5 hover:bg-gray-200 rounded transition-colors duration-200 flex-shrink-0"
+                            title="Copy"
+                          >
+                            {copiedField === key ? (
+                              <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4 text-green-500" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 md:h-4 md:w-4 text-gray-500" />
+                            )}
+                          </button>
+                        </div>
+                      ))
+                  )}
                 </div>
               </div>
 

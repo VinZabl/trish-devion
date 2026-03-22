@@ -212,11 +212,25 @@ const OrderStatusModal: React.FC<OrderStatusModalProps> = ({ orderId, isOpen, on
             <div className="glass-strong rounded-lg p-4 border border-cafe-primary/30">
               <h3 className="font-medium text-cafe-text mb-4">Customer Information</h3>
               <div className="space-y-2">
-                {Object.entries(order.customer_info).map(([key, value]) => (
-                  <p key={key} className="text-sm text-cafe-textMuted">
-                    {key}: {value}
-                  </p>
-                ))}
+                {Array.isArray(order.customer_info) ? (
+                  order.customer_info.map((info, idx) => (
+                    <div key={idx} className="bg-cafe-darkBg/50 p-3 rounded-lg border border-cafe-primary/20">
+                      <p className="text-sm font-semibold text-cafe-text mb-2">{info.game} - {info.package}</p>
+                      {Object.entries(info.fields || {}).map(([key, val]) => (
+                        <div key={key} className="flex justify-between items-center text-sm">
+                          <span className="text-cafe-textMuted">{key}:</span>
+                          <span className="text-cafe-text break-words ml-2 text-right">{val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                ) : (
+                  Object.entries(order.customer_info || {}).map(([key, value]) => (
+                    <p key={key} className="text-sm text-cafe-textMuted">
+                      {key}: {String(value)}
+                    </p>
+                  ))
+                )}
               </div>
             </div>
           </div>
